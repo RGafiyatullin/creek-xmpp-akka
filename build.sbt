@@ -13,10 +13,10 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3"
 )
 
-val creekXmppVersion = "2553c6ad60273b7dd5b6c0a7cd1a0cfa64a6a652"
+val creekXmppVersion = "3757f8d2621e7dec92f6752e5cb7b9e8e2b56732"
 val creekXmppUrlBase = "https://github.com/RGafiyatullin/creek-xmpp.git"
 val creekXmppUrl = url("%s#%s".format(creekXmppUrlBase, creekXmppVersion))
-// val creekXmppUrl = file("../creek-xmpp")
+//val creekXmppUrl = file("../creek-xmpp")
 lazy val creekXmppSubProject = RootProject(creekXmppUrl.toURI)
 
 lazy val akkaXmpp = Project("creek-xmpp-akka", file(".")).dependsOn(creekXmppSubProject)
