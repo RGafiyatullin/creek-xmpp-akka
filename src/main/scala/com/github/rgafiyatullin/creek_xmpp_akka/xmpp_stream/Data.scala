@@ -11,9 +11,7 @@ object Data {
     val is = InputStream.empty
     val os = OutputStream.empty
 
-    Data(
-      is, os, connection, config.owner,
-      Queue.empty, Queue.empty)
+    Data(is, os, connection)
   }
 }
 
@@ -21,10 +19,7 @@ case class Data(
                  inputStream: InputStream,
                  outputStream: OutputStream,
                  tcp: ActorRef,
-                 owner: Option[ActorRef],
-                 inboundEvents: Queue[StreamEvent],
-                 inboundEventReplyTos: Queue[ActorRef]
+                 owner: Option[ActorRef] = None,
+                 inboundEvents: Queue[StreamEvent] = Queue.empty,
+                 inboundEventReplyTos: Queue[ActorRef] = Queue.empty
                )
-{
-
-}

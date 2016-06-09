@@ -5,7 +5,7 @@ import akka.io.{IO, Tcp}
 import akka.util.ByteString
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.XmppStream
-import com.github.rgafiyatullin.creek_xmpp_akka.common.actor_api.Ok
+import com.github.rgafiyatullin.creek_xmpp_akka.common.actor_api.{Err, Ok}
 
 import scala.annotation.tailrec
 
@@ -43,20 +43,43 @@ class XmppStreamActor(config: XmppStream.Config)
 
   private def whenConnected(data: Data): Receive = {
     case Api.SendEvent(outboundEvent) =>
-      handleAskSendEvent(outboundEvent, data)
+      context become
+        whenConnected(
+          handleAskSendEvent(outboundEvent, data))
 
     case Api.RecvEvent(maybeTo) =>
-      handleAskRecvEvent(maybeTo, data)
+      context become
+        whenConnected(
+          handleAskRecvEvent(tcpClosed = false, maybeTo, data))
 
     case Tcp.Received(inBytes) =>
-      handleTcpReceived(inBytes, data)
+      context become
+        whenConnected(
+          handleTcpReceived(inBytes, data))
+
+    case Tcp.PeerClosed =>
+      context become
+        whenDisconnected(data)
 
     case anything =>
-      log.debug("Skipping {}", anything)
+      log.debug("whenConnected: skipping {}", anything)
+  }
+
+  private def whenDisconnected(data: Data): Receive = {
+    case Api.SendEvent(_) =>
+      sender() ! Err(Api.SendError.TcpClosed)
+
+    case Api.RecvEvent(maybeTo) =>
+      context become
+        whenDisconnected(
+          handleAskRecvEvent(tcpClosed = true, maybeTo, data))
+
+    case anything =>
+      log.debug("whenDisconnected: skipping {}", anything)
   }
 
 
-  private def handleAskSendEvent(outboundEvent: StreamEvent, data0: Data): Unit = {
+  private def handleAskSendEvent(outboundEvent: StreamEvent, data0: Data): Data = {
     val replyTo = sender()
 
     val os0 = data0.outputStream.in(outboundEvent)
@@ -71,26 +94,31 @@ class XmppStreamActor(config: XmppStream.Config)
     val data1 = data0.copy(outputStream = os1)
 
     replyTo ! Ok
-    context become whenConnected(data1)
+    data1
   }
 
-  private def handleAskRecvEvent(maybeTo: Option[ActorRef], data0: Data): Unit = {
+  private def handleAskRecvEvent(tcpClosed: Boolean, maybeTo: Option[ActorRef], data0: Data): Data = {
     val replyTo = maybeTo.getOrElse(sender())
     val ieq = data0.inboundEvents
     val rtq = data0.inboundEventReplyTos
 
     val data1 =
       ieq.headOption.fold {
-        data0.copy(inboundEventReplyTos = rtq.enqueue(replyTo))
+        if (tcpClosed) {
+          replyTo ! Err(Api.RecvError.TcpClosed)
+          data0
+        }
+        else
+          data0.copy(inboundEventReplyTos = rtq.enqueue(replyTo))
       } { event =>
         replyToRecvEvent(replyTo, event)
         data0.copy(inboundEvents = ieq.tail)
       }
 
-    context become whenConnected(data1)
+    data1
   }
 
-  private def handleTcpReceived(inBytes: ByteString, data0: Data): Unit = {
+  private def handleTcpReceived(inBytes: ByteString, data0: Data): Data = {
     log.debug("Received: {} bytes. Feeding inputStream", inBytes.length)
     val is0 = inBytes.foldLeft(data0.inputStream){
       case (is, b) => is.in(b.toChar)
@@ -98,7 +126,7 @@ class XmppStreamActor(config: XmppStream.Config)
     log.debug("[XMPP_IN]: {}", is0.parser.inputBuffer.mkString)
 
     val data1 = processInputStreamEventsLoop(data0.copy(inputStream = is0))
-    context become whenConnected(data1)
+    data1
   }
 
   @tailrec
