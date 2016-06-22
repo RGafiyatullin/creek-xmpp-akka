@@ -93,7 +93,7 @@ class XmppStreamActor(config: XmppStream.Config)
 
     val data1 = data0.copy(outputStream = os1)
 
-    replyTo ! Ok
+    replyTo ! Ok(())
     data1
   }
 

@@ -33,19 +33,19 @@ final case class Ok[+Positive](value: Positive) extends Result[Positive, Nothing
                 ): Result[Positive, NextNegative] = this
 }
 
-case object Ok extends Result[Unit, Nothing] {
-  override def isOk: Boolean = true
-  override def errOption: Option[Nothing] = None
-  override def okOption: Option[Unit] = Some(())
-
-  override def okMap[NextPositive](
-                  map: Unit => NextPositive
-                ): Result[NextPositive, Nothing] = Ok(map(()))
-
-  override def errMap[NextNegative](
-                  map: Nothing => NextNegative
-                ): Result[Unit, NextNegative] = this
-}
+//case object Ok extends Result[Unit, Nothing] {
+//  override def isOk: Boolean = true
+//  override def errOption: Option[Nothing] = None
+//  override def okOption: Option[Unit] = Some(())
+//
+//  override def okMap[NextPositive](
+//                  map: Unit => NextPositive
+//                ): Result[NextPositive, Nothing] = Ok(map(()))
+//
+//  override def errMap[NextNegative](
+//                  map: Nothing => NextNegative
+//                ): Result[Unit, NextNegative] = this
+//}
 
 final case class Err[+Negative](value: Negative) extends Result[Nothing, Negative] {
   override def isOk: Boolean = false
