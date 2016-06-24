@@ -18,6 +18,20 @@ sealed trait Result[+Positive, +Negative] {
 
   def okMap[NextPositive](map: Positive => NextPositive): Result[NextPositive, Negative]
   def errMap[NextNegative](map: Negative => NextNegative): Result[Positive, NextNegative]
+
+  def map[P](f: Positive => P): Result[P, Negative] = flatMap { value => Ok(f(value)) }
+
+  def flatMap[P, N >: Negative](f: Positive => Result[P, N]): Result[P, N] =
+    this match {
+      case Ok(value) => f(value)
+      case Err(err) => Err(err)
+    }
+
+  def foreach(f: Positive => Unit): Unit =
+    this match {
+      case Ok(value) => f(value)
+      case _ => ()
+    }
 }
 
 final case class Ok[+Positive](value: Positive) extends Result[Positive, Nothing] {
@@ -61,18 +75,18 @@ final case class Err[+Negative](value: Negative) extends Result[Nothing, Negativ
                 ): Result[Nothing, NextNegative] = Err(map(value))
 }
 
-case object Err extends Result[Nothing, Unit] {
-  override def isOk: Boolean = false
-  override def errOption: Option[Unit] = Some(())
-  override def okOption: Option[Nothing] = None
-
-  override def okMap[NextPositive](
-                  map: Nothing => NextPositive
-                ): Result[NextPositive, Unit] = this
-
-  override def errMap[NextNegative](
-                  map: Unit => NextNegative
-                ): Result[Nothing, NextNegative] = Err(map(()))
-}
+//case object Err extends Result[Nothing, Unit] {
+//  override def isOk: Boolean = false
+//  override def errOption: Option[Unit] = Some(())
+//  override def okOption: Option[Nothing] = None
+//
+//  override def okMap[NextPositive](
+//                  map: Nothing => NextPositive
+//                ): Result[NextPositive, Unit] = this
+//
+//  override def errMap[NextNegative](
+//                  map: Unit => NextNegative
+//                ): Result[Nothing, NextNegative] = Err(map(()))
+//}
 
 
