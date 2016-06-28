@@ -34,6 +34,13 @@ sealed trait Result[+Positive, +Negative] {
     }
 }
 
+object Result {
+  def fromOption[Positive, Negative](errValue: Negative)(okValueOption: Option[Positive]): Result[Positive, Negative] =
+    okValueOption
+      .fold(Err(errValue): Result[Positive, Negative])(Ok(_))
+}
+
+
 final case class Ok[+Positive](value: Positive) extends Result[Positive, Nothing] {
   override def isOk: Boolean = true
   override def okOption: Option[Positive] = Some(value)
