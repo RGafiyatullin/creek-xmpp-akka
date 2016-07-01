@@ -13,7 +13,7 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3"
 )
 
-val creekXmppVersion = "d88c489c7986d817f32c23188901b0b373716882"
+val creekXmppVersion = "2c448ee"
 val creekXmppUrlBase = "https://github.com/RGafiyatullin/creek-xmpp.git"
 val creekXmppUrl = url("%s#%s".format(creekXmppUrlBase, creekXmppVersion))
 //val creekXmppUrl = file("../creek-xmpp")
