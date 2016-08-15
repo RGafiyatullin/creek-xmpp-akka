@@ -1,24 +1,27 @@
 
 name := "creek-xmpp-akka"
 
-version := "0.0"
+version := "0.1.0"
 
 scalaVersion in ThisBuild := "2.11.8"
 val akkaVersion = "2.4.4"
+
+organization := "com.github.rgafiyatullin"
+
+publishTo := {
+  val nexus = "http://nexus.in-docker.localhost:8081/"
+  Some("releases"  at nexus + "content/repositories/releases")
+}
+credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 
 libraryDependencies ++= Seq(
   "org.scalatest"       %% "scalatest"        % "2.2.6",
   "com.typesafe.akka"   %% "akka-actor"       % akkaVersion,
   "com.typesafe.akka"   %% "akka-slf4j"       % akkaVersion,
-  "ch.qos.logback"      %  "logback-classic"  % "1.1.3"
+  "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
+  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.1.0"
 )
 
-val creekXmppVersion = "84e4cc5"
-val creekXmppUrlBase = "https://github.com/RGafiyatullin/creek-xmpp.git"
-val creekXmppUrl = url("%s#%s".format(creekXmppUrlBase, creekXmppVersion))
-//val creekXmppUrl = file("../creek-xmpp")
-lazy val creekXmppSubProject = RootProject(creekXmppUrl.toURI)
-
-lazy val akkaXmpp = Project("creek-xmpp-akka", file(".")).dependsOn(creekXmppSubProject)
+lazy val akkaXmpp = Project("creek-xmpp-akka", file("."))
 
 
