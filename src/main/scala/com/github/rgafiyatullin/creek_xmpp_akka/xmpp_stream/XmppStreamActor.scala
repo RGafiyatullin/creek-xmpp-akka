@@ -1,5 +1,7 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
 
+import java.io.ByteArrayInputStream
+
 import akka.actor.{Actor, ActorLogging, ActorRef, Stash}
 import akka.io.{IO, Tcp}
 import akka.util.ByteString
@@ -120,6 +122,7 @@ class XmppStreamActor(config: XmppStream.Config)
 
   private def handleTcpReceived(inBytes: ByteString, data0: Data): Data = {
     log.debug("Received: {} bytes. Feeding inputStream", inBytes.length)
+
     val is0 = inBytes.foldLeft(data0.inputStream){
       case (is, b) => is.in(b.toChar)
     }
