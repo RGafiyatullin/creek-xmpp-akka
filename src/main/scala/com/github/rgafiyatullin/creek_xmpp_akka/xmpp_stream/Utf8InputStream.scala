@@ -1,5 +1,7 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
 
+import java.nio.charset.StandardCharsets
+
 import scala.collection.immutable.Queue
 
 trait Utf8Error
@@ -15,6 +17,9 @@ trait Utf8InputStream {
 }
 
 object Utf8InputStream {
+
+  def empty: Utf8InputStream = Empty
+
   case object Empty extends Utf8InputStream {
     override def in(b: Byte): Either[Utf8Error, Utf8InputStream] =
       bytesExpectedByFirstByte(b) match {
@@ -53,14 +58,12 @@ object Utf8InputStream {
 
 
     private def toChar(acc: Queue[Byte]): Char = {
-      acc.foldLeft(0)({
-        case (a, b) => a * 0x100 + b
-      }).toChar
+      new String(acc.toArray, StandardCharsets.UTF_8).charAt(0)
     }
   }
 
 
-  val query0 = 0xd0.toByte // 1100 0000
+  val query0 = 0xc0.toByte // 1100 0000
   val query1 = 0x80.toByte // 1000 0000
   val query2 = 0xe0.toByte // 1110 0000
   val query3 = 0xf0.toByte // 1111 0000
@@ -78,6 +81,6 @@ object Utf8InputStream {
     else if ((b & query2) == mask2) 1
     else if ((b & query3) == mask3) 2
     else if ((b & query4) == mask4) 3
-    else throw new AssertionError("Failed to match byte of UTF8-stream")
+    else throw new AssertionError("Failed to match byte of UTF8-stream [byte: " + b + "]")
   }
 }

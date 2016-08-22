@@ -10,16 +10,17 @@ object Data {
   def create(config: XmppStream.Config, connection: ActorRef): Data = {
     val is = InputStream.empty
     val os = OutputStream.empty
+    val utf8 = Utf8InputStream.empty
 
-    Data(is, os, connection)
+    Data(is, os, utf8, connection)
   }
 }
 
 case class Data(
-                 inputStream: InputStream,
-                 outputStream: OutputStream,
-                 tcp: ActorRef,
-                 owner: Option[ActorRef] = None,
-                 inboundEvents: Queue[StreamEvent] = Queue.empty,
-                 inboundEventReplyTos: Queue[ActorRef] = Queue.empty
-               )
+  inputStream: InputStream,
+  outputStream: OutputStream,
+  utf8InputStream: Utf8InputStream,
+  tcp: ActorRef,
+  owner: Option[ActorRef] = None,
+  inboundEvents: Queue[StreamEvent] = Queue.empty,
+  inboundEventReplyTos: Queue[ActorRef] = Queue.empty)

@@ -10,6 +10,7 @@ import com.github.rgafiyatullin.creek_xmpp_akka.XmppStream
 import com.github.rgafiyatullin.creek_xmpp_akka.common.actor_api.{Err, Ok}
 
 import scala.annotation.tailrec
+import scala.collection.immutable.Queue
 
 class XmppStreamActor(config: XmppStream.Config)
   extends Actor with ActorLogging with Stash
@@ -123,13 +124,29 @@ class XmppStreamActor(config: XmppStream.Config)
   private def handleTcpReceived(inBytes: ByteString, data0: Data): Data = {
     log.debug("Received: {} bytes. Feeding inputStream", inBytes.length)
 
-    val is0 = inBytes.foldLeft(data0.inputStream){
-      case (is, b) => is.in(b.toChar)
-    }
-    log.debug("[XMPP_IN]: {}", is0.parser.inputBuffer.mkString)
+    val data1 = inBytes.foldLeft(data0){
+      case (d, b) =>
+        val (maybeCh, utf8is0) = d.utf8InputStream.out
+        val Right(utf8is1) = utf8is0.in(b)
 
-    val data1 = processInputStreamEventsLoop(data0.copy(inputStream = is0))
-    data1
+        val d1 = maybeCh
+          .map(ch => d.copy(inputStream = d.inputStream.in(ch)))
+          .getOrElse(d)
+
+        d1.copy(utf8InputStream = utf8is1)
+    }
+
+    val data2 = data1.utf8InputStream.out match {
+      case (Some(ch), utf8next) =>
+        data1.copy(inputStream = data1.inputStream.in(ch), utf8InputStream = utf8next)
+      case (None, _) =>
+        data1
+    }
+
+    log.debug("[XMPP_IN]: {}", data2.inputStream.parser.inputBuffer.mkString)
+
+    val data3 = processInputStreamEventsLoop(data2)
+    data3
   }
 
   @tailrec
