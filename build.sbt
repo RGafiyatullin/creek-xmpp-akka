@@ -1,7 +1,7 @@
 
 name := "creek-xmpp-akka"
 
-version := "0.1.5"
+version := "0.1.6"
 
 scalaVersion in ThisBuild := "2.11.8"
 val akkaVersion = "2.4.4"
@@ -19,7 +19,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"   %% "akka-actor"       % akkaVersion,
   "com.typesafe.akka"   %% "akka-slf4j"       % akkaVersion,
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
-  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.1.4"
+  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.1.5"
 )
 
 lazy val akkaXmpp = Project("creek-xmpp-akka", file("."))
