@@ -84,13 +84,15 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
   def handleRecvEvent(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
     case XmppStreamApi.api.RecvEvent(replyToOption) =>
-      val replyTo = replyToOption.getOrElse(sender())
+      val akkaSender = sender()
       val promise = Promise[StreamEvent]()
 
       for {
         event <- promise.future
       }
-        replyTo ! AkkaSuccess(event)
+        replyToOption.fold {
+          akkaSender ! AkkaSuccess(event)
+        }(_ ! (self, event))
 
       context become next(data.enquireStreamEvent(promise))
   }
