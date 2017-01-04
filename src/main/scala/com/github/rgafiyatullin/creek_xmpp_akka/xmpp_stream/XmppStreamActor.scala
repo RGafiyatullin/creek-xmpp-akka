@@ -14,6 +14,7 @@ import scala.util.Success
 object XmppStreamActor {
   case object ConnectionTimeout extends Throwable
   case object ConnectionFailed extends Throwable
+  case object PeerClosed extends Throwable
 
   private val csUtf8 = Charset.forName("UTF-8")
 }
@@ -77,6 +78,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
     handleExpectConnectedWhenConnected(data, whenConnected) orElse
       handleSendEvent(data, whenConnected) orElse
       handleTcpInput(data, whenConnected) orElse
+      handleTcpClosed(data, whenConnected) orElse
       handleRecvEvent(data, whenConnected) orElse
       handleSwitchTransport(data, whenConnected) orElse
       stdReceive.discard
@@ -120,6 +122,11 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
       val dataOut = streamEvents.foldLeft(dataHLEsProcessed)(_.appendStreamEvent(_))
 
       context become next(dataOut)
+  }
+
+  def handleTcpClosed(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
+    case Tcp.PeerClosed =>
+      throw XmppStreamActor.PeerClosed
   }
 
   def handleSwitchTransport(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
