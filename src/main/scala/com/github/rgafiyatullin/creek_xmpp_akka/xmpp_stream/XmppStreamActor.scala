@@ -1,6 +1,4 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
-
-import akka.pattern.ask
 import akka.actor.Status.{Success => AkkaSuccess}
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Stash}
 import akka.io.{IO, Tcp}
@@ -100,7 +98,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
   def handleSendEvent(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
     case XmppStreamApi.api.SendEvent(streamEvent) =>
       val (hles, dataEventProcessed) = data.withOutputStream(_.in(streamEvent).out)
-      val (output, dataHLEsRendered) = data.withTransport(_.write(hles))
+      val (output, dataHLEsRendered) = dataEventProcessed.withTransport(_.write(hles))
       log.debug("[XMPP_OUT] {}", output)
       data.connection ! Tcp.Write(output)
       sender() ! AkkaSuccess(())
@@ -111,7 +109,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
     case Tcp.Received(bytes) =>
       log.debug("[XMPP_IN] {}", bytes.mkString)
       val (hles, dataBytesProcessed) = data.withTransport(_.read(bytes))
-      val (streamEvents, dataHLEsProcessed) = data.withInputStream(hles.foldLeft(_)(_.in(_)).outAll)
+      val (streamEvents, dataHLEsProcessed) = dataBytesProcessed.withInputStream(hles.foldLeft(_)(_.in(_)).outAll)
       val dataOut = streamEvents.foldLeft(dataHLEsProcessed)(_.appendStreamEvent(_))
 
       context become next(dataOut)
