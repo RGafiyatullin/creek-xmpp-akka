@@ -1,7 +1,10 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
+import java.nio.charset.Charset
+
 import akka.actor.Status.{Success => AkkaSuccess}
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Stash}
 import akka.io.{IO, Tcp}
+import com.github.rgafiyatullin.creek_xml.common.Attribute
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.owl_akka_goodies.actor_future.{ActorFuture, ActorStdReceive}
 
@@ -11,6 +14,8 @@ import scala.util.Success
 object XmppStreamActor {
   case object ConnectionTimeout extends Throwable
   case object ConnectionFailed extends Throwable
+
+  private val csUtf8 = Charset.forName("UTF-8")
 }
 
 class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
@@ -99,9 +104,9 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
   def handleSendEvent(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
     case XmppStreamApi.api.SendEvent(streamEvent) =>
+      log.debug("[SEND] {}", streamEventToString(streamEvent))
       val (hles, dataEventProcessed) = data.withOutputStream(_.in(streamEvent).out)
       val (output, dataHLEsRendered) = dataEventProcessed.withTransport(_.write(hles))
-      log.debug("[XMPP_OUT] {}", output)
       data.connection ! Tcp.Write(output)
       sender() ! AkkaSuccess(())
       context become next(dataHLEsRendered)
@@ -109,9 +114,9 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
   def handleTcpInput(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
     case Tcp.Received(bytes) =>
-      log.debug("[XMPP_IN] {}", bytes.mkString)
       val (hles, dataBytesProcessed) = data.withTransport(_.read(bytes))
       val (streamEvents, dataHLEsProcessed) = dataBytesProcessed.withInputStream(hles.foldLeft(_)(_.in(_)).outAll)
+      streamEvents.foreach(se => log.debug("[RECV] {}", streamEventToString(se)))
       val dataOut = streamEvents.foldLeft(dataHLEsProcessed)(_.appendStreamEvent(_))
 
       context become next(dataOut)
@@ -130,4 +135,26 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
           next(dataWithUpgradedTransport)
         })
   }
+
+  def streamEventToString(se: StreamEvent): String =
+    se match {
+      case StreamEvent.StreamOpen(attrs) =>
+        "STREAM-OPEN[" + attrs.map {
+          case Attribute.Unprefixed(k, v) => k + " -> " + v
+          case Attribute.Prefixed(p, k, v) => p + ":" + k + " -> " + v
+          case Attribute.NsImport(p, ns) => "xmlns:" + p + " -> " + ns
+        }.mkString(", ") + "]"
+
+      case StreamEvent.StreamClose() =>
+        "STREAM-CLOSE"
+
+      case StreamEvent.Stanza(xml) =>
+        "STANZA: " + xml.rendered
+
+      case StreamEvent.RemoteError(error) =>
+        "REMOTE-ERROR: " + error.toString
+
+      case StreamEvent.LocalError(error) =>
+        "LOCAL-ERROR: " + error.toString
+    }
 }
