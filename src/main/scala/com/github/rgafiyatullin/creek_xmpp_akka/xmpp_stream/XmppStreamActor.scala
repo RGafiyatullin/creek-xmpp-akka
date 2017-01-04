@@ -1,177 +1,133 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
 
-import java.io.ByteArrayInputStream
-
-import akka.actor.{Actor, ActorLogging, ActorRef, Stash}
+import akka.pattern.ask
+import akka.actor.Status.{Success => AkkaSuccess}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, Stash}
 import akka.io.{IO, Tcp}
-import akka.util.ByteString
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
-import com.github.rgafiyatullin.creek_xmpp_akka.XmppStream
-import com.github.rgafiyatullin.creek_xmpp_akka.common.actor_api.{Err, Ok}
+import com.github.rgafiyatullin.owl_akka_goodies.actor_future.{ActorFuture, ActorStdReceive}
 
-import scala.annotation.tailrec
-import scala.collection.immutable.Queue
+import scala.concurrent.Promise
+import scala.util.Success
 
-class XmppStreamActor(config: XmppStream.Config)
-  extends Actor with ActorLogging with Stash
+object XmppStreamActor {
+  case object ConnectionTimeout extends Throwable
+  case object ConnectionFailed extends Throwable
+}
+
+class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
+  extends Actor
+    with Stash
+    with ActorLogging
+    with ActorFuture
+    with ActorStdReceive
 {
+  implicit val executionContext = context.dispatcher
+
+  self ! initArgs.connectionConfig
+
   override def receive: Receive =
-    config.connection match {
-      case XmppStream.Connected(connection) =>
-        whenConnected(Data.create(config, connection))
+    whenAboutToInit
 
-      case XmppStream.ConnectTo(inetSocketAddress) =>
-        IO(Tcp)(context.system) ! Tcp.Connect(inetSocketAddress)
-        whenConnecting
-    }
+  def whenAboutToInit: Receive =
+    handleInitConnection
+      stdReceive.discard
 
-  private def whenConnecting: Receive = {
-    case Tcp.Connected(remoteAddress, localAddress) =>
-      val connection = sender()
-      log.info(
-        "Connected. Remote: {}; Local: {}; Connection: {}",
-        remoteAddress, localAddress, connection)
-      unstashAll()
-      connection ! Tcp.Register(self)
-      context become whenConnected(Data.create(config, connection))
+  def handleInitConnection: Receive = {
+    case XmppStreamApi.ConnectTo(addr, connectTimeout) =>
+      val connectionPromise = Promise[ActorRef]
+      val connectionFuture = connectionPromise.future
 
-    case Tcp.CommandFailed(_: Tcp.Connect) =>
-      log.warning("Connection failed")
-      context stop(self)
+      context.actorOf(Props(new Actor {
+        IO(Tcp)(context.system) ! Tcp.Connect(addr)
+        val timeoutAlarm = context.system.scheduler
+          .scheduleOnce(connectTimeout.duration, self, XmppStreamActor.ConnectionTimeout)
 
-    case anything =>
-      log.debug("Stashing: {}", anything)
-      stash()
-  }
+        override def receive = {
+          case Tcp.Connected(_, _) =>
+            timeoutAlarm.cancel()
+            val connection = sender()
+            connectionPromise.success(connection)
 
-  private def whenConnected(data: Data): Receive = {
-    case Api.SendEvent(outboundEvent) =>
-      context become
-        whenConnected(
-          handleAskSendEvent(outboundEvent, data))
+          case Tcp.CommandFailed(_: Tcp.Connect) =>
+            timeoutAlarm.cancel()
+            connectionPromise.failure(new Exception("Failed to connect to %s".format(addr)))
 
-    case Api.RecvEvent(maybeTo) =>
-      context become
-        whenConnected(
-          handleAskRecvEvent(tcpClosed = false, maybeTo, data))
-
-    case Tcp.Received(inBytes) =>
-      context become
-        whenConnected(
-          handleTcpReceived(inBytes, data))
-
-    case Tcp.PeerClosed =>
-      context become
-        whenDisconnected(data)
-
-    case anything =>
-      log.debug("whenConnected: skipping {}", anything)
-  }
-
-  private def whenDisconnected(data: Data): Receive = {
-    case Api.SendEvent(_) =>
-      sender() ! Err(Api.SendError.TcpClosed)
-
-    case Api.RecvEvent(maybeTo) =>
-      context become
-        whenDisconnected(
-          handleAskRecvEvent(tcpClosed = true, maybeTo, data))
-
-    case anything =>
-      log.debug("whenDisconnected: skipping {}", anything)
-  }
-
-
-  private def handleAskSendEvent(outboundEvent: StreamEvent, data0: Data): Data = {
-    val replyTo = sender()
-
-    val os0 = data0.outputStream.in(outboundEvent)
-    val (outStrings, os1) = os0.out
-
-    val outString = outStrings.mkString
-    val tcpCommand = Tcp.Write(ByteString(outString))
-    log.debug("[XMPP_OUT]: {}", outString)
-
-    data0.tcp ! tcpCommand
-
-    val data1 = data0.copy(outputStream = os1)
-
-    replyTo ! Ok(())
-    data1
-  }
-
-  private def handleAskRecvEvent(tcpClosed: Boolean, maybeTo: Option[ActorRef], data0: Data): Data = {
-    val replyTo = maybeTo.getOrElse(sender())
-    val ieq = data0.inboundEvents
-    val rtq = data0.inboundEventReplyTos
-
-    val data1 =
-      ieq.headOption.fold {
-        if (tcpClosed) {
-          replyTo ! Err(Api.RecvError.TcpClosed)
-          data0
+          case timeout @ XmppStreamActor.ConnectionTimeout =>
+            connectionPromise.failure(timeout)
         }
-        else
-          data0.copy(inboundEventReplyTos = rtq.enqueue(replyTo))
-      } { event =>
-        replyToRecvEvent(replyTo, event)
-        data0.copy(inboundEvents = ieq.tail)
+      }))
+
+      context become future.handle(connectionFuture) {
+        case Success(connection) =>
+          log.warning("Connected [connection: {}]", connection)
+          connection ! Tcp.Register(self)
+          whenConnected(XmppStreamData(connection, initArgs.defaultTransport.create))
       }
 
-    data1
+    case XmppStreamApi.Connected(connection) =>
+      connection ! Tcp.Register(self)
+      context become whenConnected(XmppStreamData(connection, initArgs.defaultTransport.create))
   }
 
-  private def handleTcpReceived(inBytes: ByteString, data0: Data): Data = {
-    log.debug("Received: {} bytes. Feeding inputStream", inBytes.length)
+  def whenConnected(data: XmppStreamData): Receive =
+    handleExpectConnectedWhenConnected(data, whenConnected) orElse
+      handleSendEvent(data, whenConnected) orElse
+      handleTcpInput(data, whenConnected) orElse
+      handleRecvEvent(data, whenConnected) orElse
+      handleSwitchTransport(data, whenConnected) orElse
+      stdReceive.discard
 
-    val data1 = inBytes.foldLeft(data0){
-      case (d, b) =>
-        val (maybeCh, utf8is0) = d.utf8InputStream.out
-        val Right(utf8is1) = utf8is0.in(b)
-
-        val d1 = maybeCh
-          .map(ch => d.copy(inputStream = d.inputStream.in(ch)))
-          .getOrElse(d)
-
-        d1.copy(utf8InputStream = utf8is1)
-    }
-
-    val data2 = data1.utf8InputStream.out match {
-      case (Some(ch), utf8next) =>
-        data1.copy(inputStream = data1.inputStream.in(ch), utf8InputStream = utf8next)
-      case (None, _) =>
-        data1
-    }
-
-    log.debug("[XMPP_IN]: {}", data2.inputStream.parser.inputBuffer.mkString)
-
-    val data3 = processInputStreamEventsLoop(data2)
-    data3
+  def handleExpectConnectedWhenConnected(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
+    case XmppStreamApi.api.ExpectConnected =>
+      sender() ! AkkaSuccess(())
+      context become next(data)
   }
 
-  @tailrec
-  private def processInputStreamEventsLoop(data0: Data): Data = {
-    data0.inputStream.out match {
-      case (None, nextIs) =>
-//        log.debug("inputStream: no more events available. {}", nextIs)
-        data0.copy(inputStream = nextIs)
+  def handleRecvEvent(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
+    case XmppStreamApi.api.RecvEvent(replyToOption) =>
+      val replyTo = replyToOption.getOrElse(sender())
+      val promise = Promise[StreamEvent]()
 
-      case (Some(event), nextIs) =>
-//        log.debug("inputStream: event {}", event)
-        val data1 =
-          data0.inboundEventReplyTos.headOption.fold {
-            data0.copy(inboundEvents = data0.inboundEvents.enqueue(event))
-          } { replyTo =>
-            replyToRecvEvent(replyTo, event)
-            data0.copy(inboundEventReplyTos = data0.inboundEventReplyTos.tail)
-          }
+      for {
+        event <- promise.future
+      }
+        replyTo ! AkkaSuccess(event)
 
-        processInputStreamEventsLoop(data1.copy(inputStream = nextIs))
-    }
+      context become next(data.enquireStreamEvent(promise))
   }
 
-  private def replyToRecvEvent(replyTo: ActorRef, event: StreamEvent): Unit = {
-    val replyWith = Ok(event)
-    replyTo ! replyWith
+  def handleSendEvent(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
+    case XmppStreamApi.api.SendEvent(streamEvent) =>
+      val (hles, dataEventProcessed) = data.withOutputStream(_.in(streamEvent).out)
+      val (output, dataHLEsRendered) = data.withTransport(_.write(hles))
+      log.debug("[XMPP_OUT] {}", output)
+      data.connection ! Tcp.Write(output)
+      sender() ! AkkaSuccess(())
+      context become next(dataHLEsRendered)
+  }
+
+  def handleTcpInput(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
+    case Tcp.Received(bytes) =>
+      log.debug("[XMPP_IN] {}", bytes.mkString)
+      val (hles, dataBytesProcessed) = data.withTransport(_.read(bytes))
+      val (streamEvents, dataHLEsProcessed) = data.withInputStream(hles.foldLeft(_)(_.in(_)).outAll)
+      val dataOut = streamEvents.foldLeft(dataHLEsProcessed)(_.appendStreamEvent(_))
+
+      context become next(dataOut)
+  }
+
+  def handleSwitchTransport(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
+    case XmppStreamApi.api.SwitchTransport(nextTransportFactory) =>
+      val replyTo = sender()
+      val nextTransport = nextTransportFactory.create
+      log.info("Upgrading XMPP-transport [{} -> {}]", data.transport.name, nextTransport.name)
+      context become nextTransport.handover(
+        data.transport, this,
+        { upgradedTransport =>
+          val (_, dataWithUpgradedTransport) = data.withTransport(_ => ((), upgradedTransport))
+          replyTo ! AkkaSuccess(())
+          next(dataWithUpgradedTransport)
+        })
   }
 }

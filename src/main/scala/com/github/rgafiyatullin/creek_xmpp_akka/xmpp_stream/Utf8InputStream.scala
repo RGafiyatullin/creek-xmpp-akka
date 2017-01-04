@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 
 import scala.collection.immutable.Queue
 
-trait Utf8Error
+trait Utf8Error extends Throwable
 object Utf8Error {
   case object CharComplete extends Utf8Error
   final case class InvalidLeadingByte(b: Byte) extends Utf8Error
