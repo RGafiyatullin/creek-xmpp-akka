@@ -35,7 +35,6 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
   def whenAboutToInit: Receive =
     handleInitConnection
-      stdReceive.discard
 
   def handleInitConnection: Receive = {
     case XmppStreamApi.ConnectTo(addr, connectTimeout) =>
@@ -62,6 +61,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
         }
       }))
 
+      unstashAll()
       context become future.handle(connectionFuture) {
         case Success(connection) =>
           log.debug("Connected [connection: {}]", connection)
@@ -71,7 +71,12 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
     case XmppStreamApi.Connected(connection) =>
       connection ! Tcp.Register(self)
+      unstashAll()
       context become whenConnected(XmppStreamData(connection, initArgs.defaultTransport.create))
+
+    case toStash =>
+      log.debug("whenAboutToInit. Stashing: {}", toStash)
+      stash()
   }
 
   def whenConnected(data: XmppStreamData): Receive =

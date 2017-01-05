@@ -1,7 +1,7 @@
 
 name := "creek-xmpp-akka"
 
-version := "0.2.6"
+version := "0.2.7"
 
 scalaVersion in ThisBuild := "2.11.8"
 val akkaVersion = "2.4.4"
