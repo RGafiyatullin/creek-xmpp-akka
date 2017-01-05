@@ -64,7 +64,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
       context become future.handle(connectionFuture) {
         case Success(connection) =>
-          log.warning("Connected [connection: {}]", connection)
+          log.debug("Connected [connection: {}]", connection)
           connection ! Tcp.Register(self)
           whenConnected(XmppStreamData(connection, initArgs.defaultTransport.create))
       }
@@ -109,6 +109,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
       log.debug("[SEND] {}", streamEventToString(streamEvent))
       val (hles, dataEventProcessed) = data.withOutputStream(_.in(streamEvent).out)
       val (output, dataHLEsRendered) = dataEventProcessed.withTransport(_.write(hles))
+      log.debug("[SEND-RAW] {}", output.toArray)
       data.connection ! Tcp.Write(output)
       sender() ! AkkaSuccess(())
       context become next(dataHLEsRendered)
@@ -116,6 +117,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
   def handleTcpInput(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
     case Tcp.Received(bytes) =>
+      log.debug("[RECV-RAW] {}", bytes.toArray)
       val (hles, dataBytesProcessed) = data.withTransport(_.read(bytes))
       val (streamEvents, dataHLEsProcessed) = dataBytesProcessed.withInputStream(hles.foldLeft(_)(_.in(_)).outAll)
       streamEvents.foreach(se => log.debug("[RECV] {}", streamEventToString(se)))
