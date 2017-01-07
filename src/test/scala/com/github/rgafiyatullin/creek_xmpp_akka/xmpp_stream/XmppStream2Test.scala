@@ -7,7 +7,6 @@ import akka.io.{IO, Tcp}
 import akka.util.Timeout
 import akka.testkit.TestActorRef
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.XmppStreamApi
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.BinaryXml
 import com.github.rgafiyatullin.owl_akka_goodies.actor_future.ActorStdReceive
 import org.scalatest.concurrent.ScalaFutures

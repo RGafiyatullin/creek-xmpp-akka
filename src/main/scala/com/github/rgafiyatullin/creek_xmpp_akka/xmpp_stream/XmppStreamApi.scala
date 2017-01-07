@@ -4,13 +4,16 @@ import java.net.InetSocketAddress
 import java.util.UUID
 
 import akka.pattern.ask
-import akka.actor.{ActorRef, ActorRefFactory, Props}
+import akka.actor.{Actor, ActorContext, ActorRef, ActorRefFactory, Props}
 import akka.util.Timeout
+import com.github.rgafiyatullin.creek_xml.dom.Node
+import com.github.rgafiyatullin.creek_xmpp.protocol.stanza.Stanza
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.{PlainXml, XmppTransportFactory}
 
 import scala.concurrent.duration._
 import scala.concurrent.Future
+import scala.util.{Success, Try}
 
 object XmppStreamApi {
   sealed trait ConnectionConfig
@@ -49,4 +52,24 @@ final case class XmppStreamApi(actor: ActorRef) {
 
   def sendEvent(event: StreamEvent)(implicit ct: Timeout): Future[Unit] =
     actor.ask(XmppStreamApi.api.SendEvent(event)).mapTo[Unit]
+
+  def handleInboundStanza[StanzaType <: Stanza[_]]
+    (context: ActorContext)
+    (test: Node => Try[StanzaType])
+    (handle: StanzaType => Actor.Receive)
+  : Actor.Receive =
+    new Actor.Receive {
+      override def isDefinedAt(msg: Any): Boolean = msg match {
+        case (`actor`, StreamEvent.Stanza(node)) =>
+          test(node).isSuccess
+        case _ =>
+          false
+      }
+
+      override def apply(msg: Any): Unit = {
+        val (`actor`, StreamEvent.Stanza(node)) = msg
+        val Success(stanza) = test(node)
+        context become handle(stanza)
+      }
+    }
 }
