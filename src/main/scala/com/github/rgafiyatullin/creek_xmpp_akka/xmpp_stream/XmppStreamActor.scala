@@ -1,4 +1,5 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
+import java.net.InetSocketAddress
 import java.nio.charset.Charset
 
 import akka.actor.Status.{Success => AkkaSuccess}
@@ -12,9 +13,11 @@ import scala.concurrent.Promise
 import scala.util.Success
 
 object XmppStreamActor {
-  case object ConnectionTimeout extends Throwable
-  case object ConnectionFailed extends Throwable
-  case object PeerClosed extends Throwable
+  case object ConnectionTimeout extends Exception
+  final case class ConnectionFailed(to: InetSocketAddress) extends Exception {
+    override def getMessage = "Failed to connect to %s".format(to)
+  }
+  case object PeerClosed extends Exception
 
   private val csUtf8 = Charset.forName("UTF-8")
 }
@@ -54,7 +57,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
           case Tcp.CommandFailed(_: Tcp.Connect) =>
             timeoutAlarm.cancel()
-            connectionPromise.failure(new Exception("Failed to connect to %s".format(addr)))
+            connectionPromise.failure(XmppStreamActor.ConnectionFailed(addr))
 
           case timeout @ XmppStreamActor.ConnectionTimeout =>
             connectionPromise.failure(timeout)
@@ -133,6 +136,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
 
   def handleTcpClosed(data: XmppStreamData, next: XmppStreamData => Receive): Receive = {
     case Tcp.PeerClosed =>
+      log.info("Received Tcp.PeerClosed.")
       throw XmppStreamActor.PeerClosed
   }
 
