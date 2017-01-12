@@ -1,7 +1,7 @@
 
 name := "creek-xmpp-akka"
 
-version := "0.2.12"
+version := "0.2.13"
 
 scalaVersion in ThisBuild := "2.11.8"
 val akkaVersion = "2.4.4"
@@ -20,7 +20,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"   %% "akka-slf4j"       % akkaVersion,
   "com.typesafe.akka"   %% "akka-testkit"     % akkaVersion,
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
-  "com.github.rgafiyatullin" %% "creek-xml-binary" % "0.0.2",
+  "com.github.rgafiyatullin" %% "creek-xml-binary" % "0.0.3",
   "com.github.rgafiyatullin" %% "creek-xmpp" % "0.3.2",
   "com.github.rgafiyatullin" %% "owl-akka-goodies" % "0.1.5"
 )
