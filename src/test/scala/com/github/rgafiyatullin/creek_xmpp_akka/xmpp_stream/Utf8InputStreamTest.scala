@@ -1,6 +1,8 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
 
 import java.nio.charset.StandardCharsets
+
+import com.github.rgafiyatullin.creek_xml.utf8.Utf8InputStream
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.Queue

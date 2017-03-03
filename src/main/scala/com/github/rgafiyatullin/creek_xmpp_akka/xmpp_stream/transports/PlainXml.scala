@@ -9,7 +9,8 @@ import com.github.rgafiyatullin.creek_xml.stream_parser.high_level_parser.{HighL
 import com.github.rgafiyatullin.creek_xml.stream_parser.low_level_parser.LowLevelParserError
 import com.github.rgafiyatullin.creek_xml.stream_parser.tokenizer.TokenizerError
 import com.github.rgafiyatullin.creek_xml.stream_writer.high_level_writer.HighLevelWriter
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.{Utf8InputStream, XmppStreamActor}
+import com.github.rgafiyatullin.creek_xml.utf8.Utf8InputStream
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.XmppStreamActor
 
 import scala.annotation.tailrec
 import scala.collection.immutable.Queue
