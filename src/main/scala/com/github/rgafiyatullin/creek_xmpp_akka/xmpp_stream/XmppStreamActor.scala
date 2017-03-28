@@ -44,7 +44,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
       val connectionPromise = Promise[ActorRef]
       val connectionFuture = connectionPromise.future
 
-      context.actorOf(Props(new Actor {
+      val connectionStarter = context.actorOf(Props(new Actor {
         IO(Tcp)(context.system) ! Tcp.Connect(addr)
         val timeoutAlarm = context.system.scheduler
           .scheduleOnce(connectTimeout.duration, self, XmppStreamActor.ConnectionTimeout)
@@ -54,7 +54,7 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
             timeoutAlarm.cancel()
             val connection = sender()
             connectionPromise.success(connection)
-            context stop self
+            ()
 
           case Tcp.CommandFailed(_: Tcp.Connect) =>
             timeoutAlarm.cancel()
@@ -65,13 +65,14 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
             connectionPromise.failure(timeout)
             context stop self
         }
-      }))
+      }), "connection-starter")
 
       unstashAll()
       context become future.handle(connectionFuture) {
         case Success(connection) =>
           log.debug("Connected [connection: {}]", connection)
           connection ! Tcp.Register(self)
+          context stop connectionStarter
           whenConnected(XmppStreamData(connection, initArgs.defaultTransport.create))
       }
 
