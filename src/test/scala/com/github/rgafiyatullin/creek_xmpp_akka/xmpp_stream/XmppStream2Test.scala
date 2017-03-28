@@ -61,6 +61,7 @@ class XmppStream2Test extends FlatSpec with Matchers with ScalaFutures {
               XmppStreamApi.Connected(connection)
             ), "server")(actorRefFactory)
           promiseServer.success(server)
+          ()
       }
     }
 

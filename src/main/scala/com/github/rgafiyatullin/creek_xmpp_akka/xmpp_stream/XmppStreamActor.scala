@@ -54,13 +54,16 @@ class XmppStreamActor(initArgs: XmppStreamApi.InitArgs)
             timeoutAlarm.cancel()
             val connection = sender()
             connectionPromise.success(connection)
+            context stop self
 
           case Tcp.CommandFailed(_: Tcp.Connect) =>
             timeoutAlarm.cancel()
             connectionPromise.failure(XmppStreamActor.ConnectionFailed(addr))
+            context stop self
 
           case timeout @ XmppStreamActor.ConnectionTimeout =>
             connectionPromise.failure(timeout)
+            context stop self
         }
       }))
 
