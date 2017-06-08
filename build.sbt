@@ -1,7 +1,7 @@
 
 name := "creek-xmpp-akka"
 
-version := "0.2.19"
+version := "0.2.20"
 
 scalaVersion in ThisBuild := "2.11.8"
 val akkaVersion = "2.4.4"
@@ -12,19 +12,19 @@ scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature")
 scalacOptions ++= Seq("-language:implicitConversions")
 scalacOptions ++= Seq("-Ywarn-value-discard", "-Xfatal-warnings")
 
-/*
-publishTo := {
-  val nexus = "http://am3-v-perftest-xmppcs-1.be.core.pw:8081/"
-  Some("releases"  at nexus + "content/repositories/sbt-releases/")
-}
-credentials += Credentials(Path.userHome / ".ivy2" / ".credentials.am3")
-*/
 
+publishTo := {
+  Some("releases"  at "https://artifactory.wgdp.io:443/xmppcs-maven-releases/")
+}
+credentials += Credentials(Path.userHome / ".ivy2" / ".credentials.wg-domain")
+
+/*
 publishTo := {
   val nexus = "http://nexus.in-docker.localhost:8081/"
   Some("releases"  at nexus + "repository/my-releases")
 }
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials.local")
+*/
 
 libraryDependencies ++= Seq(
   "org.scalatest"       %% "scalatest"        % "2.2.6",
@@ -34,7 +34,7 @@ libraryDependencies ++= Seq(
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
   "com.github.rgafiyatullin" %% "creek-xml-binary" % "0.1.1",
   "com.github.rgafiyatullin" %% "creek-xmpp" % "0.3.5",
-  "com.github.rgafiyatullin" %% "owl-akka-goodies" % "0.1.6"
+  "com.github.rgafiyatullin" %% "owl-akka-goodies" % "0.1.8.1"
 )
 
 lazy val akkaXmpp = Project("creek-xmpp-akka", file("."))
