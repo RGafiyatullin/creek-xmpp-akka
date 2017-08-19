@@ -19,6 +19,10 @@ final case class BinaryXml(
   decoder: Decoder = Decoder.create()
 ) extends XmppTransport
 {
+  override def name = "BINARY-XML"
+
+  override def reset: XmppTransport = BinaryXml.create
+
   override def write(hles: Seq[HighLevelEvent]): (ByteString, BinaryXml) = {
     val builderIn = ByteString.createBuilder
     val (builderOut, encoderNext) = hles.foldLeft(builderIn, encoder) {
@@ -33,8 +37,6 @@ final case class BinaryXml(
   override def read(bytes: ByteString): (Seq[HighLevelEvent], BinaryXml) =
     copy(decoder = decoder.putBytes(bytes.toArray)).fetchAllHighLevelEvents(Queue.empty)
 
-
-  override def name = "BINARY-XML"
 
   override def handover(previousTransport: XmppTransport, xmppStreamActor: XmppStreamActor, next: XmppTransport => Actor.Receive): Actor.Receive =
     next(this)

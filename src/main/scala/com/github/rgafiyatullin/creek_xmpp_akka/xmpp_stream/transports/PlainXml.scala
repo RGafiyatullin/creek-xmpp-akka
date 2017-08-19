@@ -29,6 +29,9 @@ final case class PlainXml(
 ) extends XmppTransport
 {
   override def name: String = "PLAIN-XML"
+
+  override def reset: XmppTransport = PlainXml.create
+
   override def write(hles: Seq[HighLevelEvent]): (ByteString, PlainXml) = {
     val (strs, writerNext) = hles.foldLeft(writer)(_.in(_)).out
 

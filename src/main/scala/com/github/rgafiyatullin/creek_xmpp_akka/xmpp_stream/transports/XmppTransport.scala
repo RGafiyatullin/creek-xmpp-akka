@@ -14,5 +14,7 @@ trait XmppTransport {
   def read(bytes: ByteString): (Seq[HighLevelEvent], XmppTransport)
   def name: String
 
+  def reset: XmppTransport
+
   def handover(previousTransport: XmppTransport, xmppStreamActor: XmppStreamActor, next: XmppTransport => Actor.Receive): Actor.Receive
 }
