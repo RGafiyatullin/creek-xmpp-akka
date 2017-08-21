@@ -1,6 +1,7 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream
 
 import java.net.InetSocketAddress
+import java.util.UUID
 
 import akka.actor.{Actor, ActorSystem, Props, SupervisorStrategy}
 import akka.event.Logging.LogLevel
@@ -12,7 +13,7 @@ import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.{BinaryXml, PlainXml}
 import com.github.rgafiyatullin.owl_akka_goodies.actor_future.{ActorFuture, ActorStdReceive}
-import org.scalatest.FlatSpec
+import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Millis, Seconds, Span}
 
@@ -20,7 +21,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.reflect.ClassTag
 
-class XmppStreamPushModeTest extends FlatSpec with ScalaFutures {
+class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
 
   org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
     .asInstanceOf[ch.qos.logback.classic.Logger]
@@ -72,7 +73,7 @@ class XmppStreamPushModeTest extends FlatSpec with ScalaFutures {
   }
 
   def withClientAndServer[Ret](f: (ActorSystem, XmppStream, XmppStream) => Future[Ret])(implicit classTag: ClassTag[Ret]): Ret = {
-    val actorSystem = ActorSystem()
+    val actorSystem = ActorSystem(UUID.randomUUID().toString)
     try {
       val jobDone = Promise[Any]()
       actorSystem.eventStream.setLogLevel(LogLevel(4))
@@ -277,6 +278,23 @@ class XmppStreamPushModeTest extends FlatSpec with ScalaFutures {
         _ <- server.terminate()
       }
         yield ()
+    }
+  }
+
+  they should "fail the pending promisses upon connection being closed" in {
+    withClientAndServer { case (actorSystem, client, server) =>
+      implicit val ec: ExecutionContext = actorSystem.dispatcher
+
+
+      val futClientEvent = client.receiveStreamEvent()
+      val futServerEvent = server.receiveStreamEvent()
+
+      val terminated = server.terminate()(1.second)
+
+      whenReady(futServerEvent.failed)(_ shouldBe a[XmppStream.api.TerminationRequested])
+      whenReady(futClientEvent.failed)(_ shouldBe a[XmppStream.api.TcpErrorClosed])
+
+      terminated
     }
   }
 

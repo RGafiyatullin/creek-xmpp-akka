@@ -226,24 +226,14 @@ object XmppStream {
 
       private def handleTcpPeerClosed(state: XmppStreamState.Connected): Receive = {
         case Tcp.PeerClosed =>
-          val streamEvent = StreamEvent.StreamClose()
-          val (resolverOption, stateNext) = state.usingEventsDispatcher(_.addEvent(streamEvent))
-
-          resolverOption.foreach(_.apply())
-          stateNext.eventsDispatcher.consumers.foreach(_.failure(api.TcpPeerClosed()))
-
-          context become whenClosed.receive(stateNext)
+          state.eventsDispatcher.consumers.foreach(_.failure(api.TcpPeerClosed()))
+          context become whenClosed.receive(state)
       }
 
       private def handleTcpError(state: XmppStreamState.Connected): Receive = {
-        case Tcp.ErrorClosed =>
-          val streamEvent = StreamEvent.StreamClose()
-          val (resolverOption, stateNext) = state.usingEventsDispatcher(_.addEvent(streamEvent))
-
-          resolverOption.foreach(_.apply())
-          stateNext.eventsDispatcher.consumers.foreach(_.failure(api.TcpErrorClosed()))
-
-          context become whenClosed.receive(stateNext)
+        case Tcp.ErrorClosed(reason) =>
+          state.eventsDispatcher.consumers.foreach(_.failure(api.TcpErrorClosed(reason)))
+          context become whenClosed.receive(state)
       }
 
       private def handleTcpReceived(state: XmppStreamState.Connected): Receive = {
@@ -314,7 +304,7 @@ object XmppStream {
     final case class RegisterOwner(owner: ActorRef)
 
     sealed trait Shutdown extends Exception
-    final case class TcpErrorClosed() extends Shutdown
+    final case class TcpErrorClosed(reason: String) extends Shutdown
     final case class TcpPeerClosed() extends Shutdown
     final case class TerminationRequested(by: ActorRef) extends Shutdown
 
