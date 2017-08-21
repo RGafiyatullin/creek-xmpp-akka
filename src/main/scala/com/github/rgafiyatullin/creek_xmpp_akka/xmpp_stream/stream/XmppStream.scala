@@ -8,11 +8,13 @@ import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xml.common.Attribute
 import com.github.rgafiyatullin.creek_xmpp.streams.{InputStream, OutputStream, StreamEvent}
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStreamState.EventsDispatcher
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.{PlainXml, XmppTransport, XmppTransportFactory}
 import com.github.rgafiyatullin.owl_akka_goodies.actor_future.ActorStdReceive
 
 import scala.collection.immutable.Queue
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.duration._
 
 object XmppStream {
   def props(
@@ -24,8 +26,8 @@ object XmppStream {
   def propsConnectTo(to: InetSocketAddress, xmppTransportFactory: XmppTransportFactory, timeoutOption: Option[Timeout] = None): Props =
     props(ConnectionArgs.Connect(to, timeoutOption), xmppTransportFactory)
 
-  def propsFromConnection(connection: ActorRef, xmppTransportFactory: XmppTransportFactory): Props =
-    props(ConnectionArgs.FromConnection(connection), xmppTransportFactory)
+  def propsFromConnectionInPushMode(connection: ActorRef, xmppTransportFactory: XmppTransportFactory): Props =
+    props(ConnectionArgs.FromConnectionInPushMode(connection), xmppTransportFactory)
 
   def propsEmpty(xmppTransportFactory: XmppTransportFactory): Props =
     props(ConnectionArgs.Empty, xmppTransportFactory)
@@ -39,7 +41,8 @@ object XmppStream {
       timeout: Option[Timeout] = None)
         extends ConnectionArgs
 
-    final case class FromConnection(connection: ActorRef) extends ConnectionArgs
+    final case class FromConnectionInPushMode(connection: ActorRef) extends ConnectionArgs
+//    final case class FromConnectionInPullMode(connection: ActorRef) extends ConnectionArgs
 
     case object Empty extends ConnectionArgs
   }
@@ -51,20 +54,35 @@ object XmppStream {
         with ActorLogging
         with ActorStdReceive
   {
-    override def receive = initialize()
+    implicit val executionContext: ExecutionContext = context.dispatcher
+    val ownerRegistrationTimeout: Timeout = 5.seconds
+
+    val ownerWatchSat: ActorRef = context.actorOf(
+      XmppStreamOwnerWatchSat.props(self, ownerRegistrationTimeout),
+      "owner-watch-sat")
+
+    override def receive: Receive = initialize()
 
     def createTransport(): XmppTransport = transportFactory.create
 
+    def createEventsDispatcher(): EventsDispatcher[StreamEvent] =
+      XmppStreamState.EventsDispatcher.create[StreamEvent]
 
     def initialize(): Receive =
       connectionArgs match {
         case ConnectionArgs.Empty =>
           log.debug("initialize empty -> whenEmpty")
 
-          whenEmpty.receive(XmppStreamState.Empty(XmppStreamState.EventsDispatcher.create[StreamEvent]))
+          whenEmpty.receive(
+            XmppStreamState.Empty(
+              createEventsDispatcher()))
 
-        case ConnectionArgs.FromConnection(connection) =>
-          log.debug("initialize from connection -> whenConnected [connection: {}]", connection)
+//        case ConnectionArgs.FromConnectionInPullMode(connection) =>
+//          log.debug("initialize from connection[pull-mode]")
+//          ???
+
+        case ConnectionArgs.FromConnectionInPushMode(connection) =>
+          log.debug("initialize from connection[push-mode] -> whenConnected [connection: {}]", connection)
 
           connection ! Tcp.Register(self)
 
@@ -72,7 +90,7 @@ object XmppStream {
             XmppStreamState.Connected(
               connection = connection,
               transport = createTransport(),
-              eventsDispatcher = XmppStreamState.EventsDispatcher.create[StreamEvent]))
+              eventsDispatcher = createEventsDispatcher()))
 
         case ConnectionArgs.Connect(toSocketAddress, timeoutOption) =>
           log.debug("initialize connect to -> whenConnecting [to: {}; timeout: {}]", toSocketAddress, timeoutOption)
@@ -80,10 +98,15 @@ object XmppStream {
           IO(Tcp)(context.system) ! Tcp.Connect(toSocketAddress, timeout = timeoutOption.map(_.duration))
           whenConnecting.receive(
             XmppStreamState.Connecting(
-              eventsDispatcher = XmppStreamState.EventsDispatcher.create[StreamEvent]))
+              eventsDispatcher = createEventsDispatcher()))
       }
 
     object allStates {
+      def handleRegisterOwner(): Receive = {
+        case msg: api.RegisterOwner =>
+          ownerWatchSat.forward(msg)
+      }
+
       def handleTerminate(): Receive = {
         case api.Terminate() =>
           sender() ! Status.Success(())
@@ -101,14 +124,16 @@ object XmppStream {
 
     object whenEmpty {
       def receive(state: XmppStreamState.Empty): Receive =
-        allStates.handleSendStreamEventWhileInvalidState("empty") orElse
+        allStates.handleRegisterOwner() orElse
+          allStates.handleSendStreamEventWhileInvalidState("empty") orElse
           allStates.handleTerminate() orElse
           stdReceive.discard
     }
 
     object whenConnecting {
       def receive(state: XmppStreamState.Connecting): Receive =
-        handleConnected(state) orElse
+        allStates.handleRegisterOwner() orElse
+          handleConnected(state) orElse
           handleCommandFailed(state) orElse
           allStates.handleSendStreamEventWhileInvalidState("when-connecting") orElse
           allStates.handleTerminate() orElse
@@ -124,45 +149,44 @@ object XmppStream {
       private def handleConnected(state: XmppStreamState.Connecting): Receive = {
         case Tcp.Connected(remoteAddress, localAddress) =>
           val connection = sender()
-          val transport = transportFactory.create
+          val transport = createTransport()
           log.debug(
             "whenConnecting -> whenConnected [connection: {}; remote: {}; local: {}; transport: {}]",
             connection, remoteAddress, localAddress, transport.name)
 
           connection ! Tcp.Register(self)
-          context become whenConnected.receive(state.toConnected(connection, transport))
+          context become whenConnected.receive(
+            state.toConnected(connection, transport))
       }
     }
 
     object whenFailed {
       def receive(state: XmppStreamState.Failed): Receive =
-        allStates.handleSendStreamEventWhileInvalidState("failed") orElse
+        allStates.handleRegisterOwner() orElse
+          allStates.handleSendStreamEventWhileInvalidState("failed") orElse
           allStates.handleTerminate() orElse
           stdReceive.discard
     }
 
     object whenClosed {
       def receive(state: XmppStreamState.Connected): Receive =
-        allStates.handleSendStreamEventWhileInvalidState("closed") orElse
+        allStates.handleRegisterOwner() orElse
+          allStates.handleSendStreamEventWhileInvalidState("closed") orElse
           allStates.handleTerminate() orElse
           stdReceive.discard
     }
 
     object whenConnected {
       def receive(state: XmppStreamState.Connected): Receive =
-        handleTcpReceived(state) orElse
+        allStates.handleRegisterOwner() orElse
+          handleTcpReceived(state) orElse
           handleSendStreamEvent(state) orElse
           handleReceiveStreamEvent(state) orElse
-//          handleResetInputStream(state) orElse
+          //          handleResetInputStream(state) orElse
           handleTcpPeerClosed(state) orElse
           handleTcpError(state) orElse
           handleTerminate(state) orElse
           stdReceive.discard
-
-//      private def handleResetInputStream(state: XmppStreamState.Connected): Receive = {
-//        case api.ResetInputStream() =>
-//          context become receive(util.resetInputStream(state))
-//      }
 
       private def handleTerminate(state: XmppStreamState.Connected): Receive = {
         case api.Terminate() =>
@@ -225,10 +249,9 @@ object XmppStream {
       private def handleTcpReceived(state: XmppStreamState.Connected): Receive = {
         case Tcp.Received(inboundBytes) =>
 //          log.debug("[RECV-RAW] {}", inboundBytes.toArray.map(_ & 0xff).toSeq)
-
           val (xmlEvents, state1) = state.usingTransport(_.read(inboundBytes))
 //          xmlEvents.foreach(xe => log.debug("[RECV-XMLEvent] {}", xe))
-          val (xmppEvents, state2) = state.usingInputStream(xmlEvents.foldLeft(_)(_.in(_)).outAll)
+          val (xmppEvents, state2) = state1.usingInputStream(xmlEvents.foldLeft(_)(_.in(_)).outAll)
           xmppEvents.foreach(se => log.debug("[RECV] {}", util.streamEventToString(se)))
 
           val (resolvers, state3) = state2.usingEventsDispatcher { edIn =>
@@ -285,6 +308,11 @@ object XmppStream {
   }
 
   object api {
+    object RegisterOwner {
+      case object RegisterTimeout
+    }
+    final case class RegisterOwner(owner: ActorRef)
+
     sealed trait Shutdown extends Exception
     final case class TcpErrorClosed() extends Shutdown
     final case class TcpPeerClosed() extends Shutdown
@@ -304,7 +332,7 @@ object XmppStream {
       case object No extends ResetStreams {
         override def before = false
         override def after = false
-        override def transportFactoryOption = None
+        override def transportFactoryOption: Option[XmppTransportFactory] = None
       }
 
       object AfterWrite {
@@ -332,13 +360,16 @@ final case class XmppStream(actorRef: ActorRef) {
   import XmppStream.api
   import akka.pattern.ask
 
+  def registerOwner(owner: ActorRef): Unit =
+    actorRef ! api.RegisterOwner(owner)
+
   def receiveStreamEvent(): Future[StreamEvent] = {
     val p = Promise[StreamEvent]()
     actorRef ! api.ReceiveStreamEvent(p)
     p.future
   }
 
-  def sendStreamEvent(event: StreamEvent, resetStreams: ResetStreams = ResetStreams.No) =
+  def sendStreamEvent(event: StreamEvent, resetStreams: ResetStreams = ResetStreams.No): Unit =
     actorRef ! api.SendStreamEvent(event, resetStreams)
 
   def terminate()(implicit timeout: Timeout): Future[Unit] =

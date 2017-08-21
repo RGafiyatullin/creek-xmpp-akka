@@ -19,7 +19,7 @@ import scala.util.{Failure, Success, Try}
 object PlainXml extends XmppTransportFactory {
   override def create: XmppTransport = PlainXml()
 
-  val csUTF8 = Charset.forName("UTF-8")
+  val csUTF8: Charset = Charset.forName("UTF-8")
 }
 
 final case class PlainXml(
