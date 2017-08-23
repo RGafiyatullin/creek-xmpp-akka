@@ -33,7 +33,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"   %% "akka-testkit"     % akkaVersion,
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
   "com.github.rgafiyatullin" %% "creek-xml-binary" % "0.1.1",
-  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.3.5",
+  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.3.7",
   "com.github.rgafiyatullin" %% "owl-akka-goodies" % "0.1.8.1"
 )
 

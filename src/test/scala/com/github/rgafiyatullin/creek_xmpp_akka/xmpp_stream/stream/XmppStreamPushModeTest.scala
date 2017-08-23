@@ -7,7 +7,7 @@ import akka.actor.{Actor, ActorSystem, Props, SupervisorStrategy}
 import akka.event.Logging.LogLevel
 import akka.io.{IO, Tcp}
 import akka.util.Timeout
-import com.github.rgafiyatullin.creek_xml.common.QName
+import com.github.rgafiyatullin.creek_xml.common.{Attribute, QName}
 import com.github.rgafiyatullin.creek_xml.dom.Element
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
@@ -106,9 +106,11 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
     withClientAndServer { case (actorSystem, client, server) =>
       implicit val ec: ExecutionContext = actorSystem.dispatcher
 
-      server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
-      server.sendStreamEvent(StreamEvent.StreamClose())
       for {
+        _ <- server.expectConnected()
+        _ <- client.expectConnected()
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
         StreamEvent.StreamClose() <- client.receiveStreamEvent()
       }
@@ -123,25 +125,27 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
       val stanzaBinaryStart = Element(QName("binary-xml", "start"), Seq.empty, Seq.empty)
       val stanzaBinaryProceed = Element(QName("binary-xml", "proceed"), Seq.empty, Seq.empty)
 
-      client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
-
       for {
+        _ <- server.expectConnected()
+        _ <- client.expectConnected()
+
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryStart))
+        _ <- client.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryStart))
         StreamEvent.Stanza(stanza) <- server.receiveStreamEvent() if stanza.qName == stanzaBinaryStart.qName
-        _ = server.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryProceed), resetStreams = ResetStreams.AfterWrite(BinaryXml))
+        _ <- server.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryProceed), resetStreams = ResetStreams.AfterWrite(BinaryXml))
         StreamEvent.Stanza(stanza) <- client.receiveStreamEvent() if stanza.qName == stanzaBinaryProceed.qName
-        _ = client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), resetStreams = ResetStreams.BeforeWrite(BinaryXml))
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), resetStreams = ResetStreams.BeforeWrite(BinaryXml))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- client.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- server.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- client.receiveStreamEvent()
 
         _ <- client.terminate()
@@ -158,25 +162,26 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
       val stanzaAuthRequest = Element(QName("auth", "request"), Seq.empty, Seq.empty)
       val stanzaAuthSuccess = Element(QName("auth", "success"), Seq.empty, Seq.empty)
 
-      client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
-
       for {
+        _ <- server.expectConnected()
+        _ <- client.expectConnected()
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.Stanza(stanzaAuthRequest))
+        _ <- client.sendStreamEvent(StreamEvent.Stanza(stanzaAuthRequest))
         StreamEvent.Stanza(stanza) <- server.receiveStreamEvent() if stanza.qName == stanzaAuthRequest.qName
-        _ = server.sendStreamEvent(StreamEvent.Stanza(stanzaAuthSuccess), ResetStreams.AfterWrite())
+        _ <- server.sendStreamEvent(StreamEvent.Stanza(stanzaAuthSuccess), ResetStreams.AfterWrite())
         StreamEvent.Stanza(stanza) <- client.receiveStreamEvent() if stanza.qName == stanzaAuthSuccess.qName
-        _ = client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), ResetStreams.BeforeWrite())
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), ResetStreams.BeforeWrite())
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- client.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- server.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- client.receiveStreamEvent()
 
         _ <- client.terminate()
@@ -195,35 +200,38 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
       val stanzaAuthRequest = Element(QName("auth", "request"), Seq.empty, Seq.empty)
       val stanzaAuthSuccess = Element(QName("auth", "success"), Seq.empty, Seq.empty)
 
-      client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+
 
       for {
+        _ <- server.expectConnected()
+        _ <- client.expectConnected()
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryStart))
+        _ <- client.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryStart))
         StreamEvent.Stanza(stanza) <- server.receiveStreamEvent() if stanza.qName == stanzaBinaryStart.qName
-        _ = server.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryProceed), resetStreams = ResetStreams.AfterWrite(BinaryXml))
+        _ <- server.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryProceed), resetStreams = ResetStreams.AfterWrite(BinaryXml))
         StreamEvent.Stanza(stanza) <- client.receiveStreamEvent() if stanza.qName == stanzaBinaryProceed.qName
-        _ = client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), resetStreams = ResetStreams.BeforeWrite(BinaryXml))
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), resetStreams = ResetStreams.BeforeWrite(BinaryXml))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.Stanza(stanzaAuthRequest))
+        _ <- client.sendStreamEvent(StreamEvent.Stanza(stanzaAuthRequest))
         StreamEvent.Stanza(stanza) <- server.receiveStreamEvent() if stanza.qName == stanzaAuthRequest.qName
-        _ = server.sendStreamEvent(StreamEvent.Stanza(stanzaAuthSuccess), ResetStreams.AfterWrite())
+        _ <- server.sendStreamEvent(StreamEvent.Stanza(stanzaAuthSuccess), ResetStreams.AfterWrite())
         StreamEvent.Stanza(stanza) <- client.receiveStreamEvent() if stanza.qName == stanzaAuthSuccess.qName
-        _ = client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), ResetStreams.BeforeWrite())
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), ResetStreams.BeforeWrite())
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
 
-        _ = client.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- client.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- server.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- client.receiveStreamEvent()
 
         _ <- client.terminate()
@@ -243,35 +251,38 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
       val stanzaAuthRequest = Element(QName("auth", "request"), Seq.empty, Seq.empty)
       val stanzaAuthSuccess = Element(QName("auth", "success"), Seq.empty, Seq.empty)
 
-      client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+
 
       for {
+        _ <- server.expectConnected()
+        _ <- client.expectConnected()
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryStart))
+        _ <- client.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryStart))
         StreamEvent.Stanza(stanza) <- server.receiveStreamEvent() if stanza.qName == stanzaBinaryStart.qName
-        _ = server.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryProceed), resetStreams = ResetStreams.AfterWrite(BinaryXml.logging.enabled(actorSystem.log)))
+        _ <- server.sendStreamEvent(StreamEvent.Stanza(stanzaBinaryProceed), resetStreams = ResetStreams.AfterWrite(BinaryXml.logging.enabled(actorSystem.log)))
         StreamEvent.Stanza(stanza) <- client.receiveStreamEvent() if stanza.qName == stanzaBinaryProceed.qName
-        _ = client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), resetStreams = ResetStreams.BeforeWrite(BinaryXml))
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), resetStreams = ResetStreams.BeforeWrite(BinaryXml))
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
-        _ = client.sendStreamEvent(StreamEvent.Stanza(stanzaAuthRequest))
+        _ <- client.sendStreamEvent(StreamEvent.Stanza(stanzaAuthRequest))
         StreamEvent.Stanza(stanza) <- server.receiveStreamEvent() if stanza.qName == stanzaAuthRequest.qName
-        _ = server.sendStreamEvent(StreamEvent.Stanza(stanzaAuthSuccess), ResetStreams.AfterWrite())
+        _ <- server.sendStreamEvent(StreamEvent.Stanza(stanzaAuthSuccess), ResetStreams.AfterWrite())
         StreamEvent.Stanza(stanza) <- client.receiveStreamEvent() if stanza.qName == stanzaAuthSuccess.qName
-        _ = client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), ResetStreams.BeforeWrite())
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty), ResetStreams.BeforeWrite())
         StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+        _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
         StreamEvent.StreamOpen(_) <- client.receiveStreamEvent()
 
 
-        _ = client.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- client.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- server.receiveStreamEvent()
-        _ = server.sendStreamEvent(StreamEvent.StreamClose())
+        _ <- server.sendStreamEvent(StreamEvent.StreamClose())
         StreamEvent.StreamClose() <- client.receiveStreamEvent()
 
         _ <- client.terminate()
@@ -297,5 +308,17 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
       terminated
     }
   }
+
+  they should "work when streams-ns prefix is hinted" in {
+    withClientAndServer { case (actorSystem, client, server) =>
+      implicit val ec: ExecutionContext = actorSystem.dispatcher
+
+      for {
+        _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq(Attribute.NsImport("stream", "http://etherx.jabber.org/streams"))))
+        StreamEvent.StreamOpen(Seq(Attribute.NsImport("stream", "http://etherx.jabber.org/streams"))) <- server.receiveStreamEvent()
+      } yield ()
+    }
+  }
+
 
 }

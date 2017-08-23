@@ -5,6 +5,7 @@ import akka.util.Timeout
 import com.github.rgafiyatullin.owl_akka_goodies.actor_future.ActorStdReceive
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 object XmppStreamOwnerWatchSat {
   def props(xmppStreamActorRef: ActorRef, timeout: Timeout): Props =
@@ -30,7 +31,7 @@ object XmppStreamOwnerWatchSat {
     def handleTimeout(): Receive = {
       case XmppStream.api.RegisterOwner.RegisterTimeout =>
         log.warning("No owner registered within {}: shutting down", timeout)
-        xmppStream.terminate()(Timeout.zero)
+        xmppStream.terminate()(1.second)
         context become stdReceive.discard
     }
 
@@ -47,6 +48,10 @@ object XmppStreamOwnerWatchSat {
         log.debug("Owner terminated. Shutting down. [owner: {}]", owner)
         context stop self
         context become stdReceive.discard
+
+      case Terminated(stray) =>
+        log.warning("Stray Terminated(_) message received [expected: {}; actual: {}]", owner, stray)
+        context become whenReady(owner)
     }
 
     def handleRegister(oldOwner: ActorRef): Receive = {

@@ -110,9 +110,13 @@ object XmppStreamState {
     transport: XmppTransport,
     eventsDispatcher: EventsDispatcher[StreamEvent],
     outputStream: OutputStream = OutputStream.empty,
-    inputStream: InputStream = InputStream.empty)
+    inputStream: InputStream = InputStream.empty,
+    inputStreamFailureOption: Option[Exception] = None)
       extends XmppStreamState
   {
+    def withInputStreamFailure(e: Exception): Connected =
+      copy(inputStreamFailureOption = Some(e))
+
 
 
     def usingTransport[T](f: XmppTransport => (T, XmppTransport)): (T, Connected) =
