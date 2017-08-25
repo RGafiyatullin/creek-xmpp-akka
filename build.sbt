@@ -27,13 +27,13 @@ credentials += Credentials(Path.userHome / ".ivy2" / ".credentials.local")
 */
 
 libraryDependencies ++= Seq(
-  "org.scalatest"       %% "scalatest"        % "2.2.6",
+  "org.scalatest"       %% "scalatest"        % "3.0.4",
   "com.typesafe.akka"   %% "akka-actor"       % akkaVersion,
   "com.typesafe.akka"   %% "akka-slf4j"       % akkaVersion,
   "com.typesafe.akka"   %% "akka-testkit"     % akkaVersion,
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
   "com.github.rgafiyatullin" %% "creek-xml-binary" % "0.1.1",
-  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.3.7",
+  "com.github.rgafiyatullin" %% "creek-xmpp" % "0.3.7.1",
   "com.github.rgafiyatullin" %% "owl-akka-goodies" % "0.1.8.1"
 )
 

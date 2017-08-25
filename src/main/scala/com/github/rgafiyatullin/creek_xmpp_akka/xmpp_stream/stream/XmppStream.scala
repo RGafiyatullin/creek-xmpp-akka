@@ -13,7 +13,6 @@ import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStreamSta
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.{PlainXml, XmppTransport, XmppTransportFactory}
 import com.github.rgafiyatullin.owl_akka_goodies.actor_future.ActorStdReceive
 
-
 import scala.collection.immutable.Queue
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
@@ -128,9 +127,9 @@ object XmppStream {
 
       def handleSendStreamEventWhileInvalidState(stateName: String): Receive = {
         case api.SendStreamEvent(se, _) =>
-          log.warning(
-            "attempt to send stream-event while in invalid state [state: {}; event: {}]",
-            stateName, util.streamEventToString(se))
+          val message = "attempt to send stream-event while in invalid state [state: %s; event: %s]".format(stateName, util.streamEventToString(se))
+          log.warning(message)
+          sender() ! Status.Failure(new IllegalStateException(message))
       }
     }
 
@@ -187,8 +186,20 @@ object XmppStream {
     }
 
     object whenClosed {
-      def receive(state: XmppStreamState.Connected): Receive =
-        allStates.handleExpectConnected() orElse
+      private def handleReceiveStreamEvent(state: XmppStreamState.Connected, shutdownReason: api.Shutdown): Receive = {
+        case api.ReceiveStreamEvent(promise) =>
+          val (resolverOption, state1) = state.usingEventsDispatcher(_.addConsumer(promise))
+          val (resolver, state2) = resolverOption match {
+            case Some(r) =>  (r, state1)
+            case None => (() => promise.failure(shutdownReason), state)
+          }
+          resolver()
+          context become whenClosed.receive(state2, shutdownReason)
+      }
+
+      def receive(state: XmppStreamState.Connected, shutdownReason: api.Shutdown): Receive =
+        handleReceiveStreamEvent(state, shutdownReason) orElse
+          allStates.handleExpectConnected() orElse
           allStates.handleRegisterOwner() orElse
           allStates.handleSendStreamEventWhileInvalidState("closed") orElse
           allStates.handleTerminate() orElse
@@ -250,14 +261,16 @@ object XmppStream {
 
       private def handleTcpPeerClosed(state: XmppStreamState.Connected): Receive = {
         case Tcp.PeerClosed =>
-          state.eventsDispatcher.consumers.foreach(_.failure(api.TcpPeerClosed()))
-          context become whenClosed.receive(state)
+          val error = api.TcpPeerClosed()
+          state.eventsDispatcher.consumers.foreach(_.failure(error))
+          context become whenClosed.receive(state, error)
       }
 
       private def handleTcpError(state: XmppStreamState.Connected): Receive = {
         case Tcp.ErrorClosed(reason) =>
-          state.eventsDispatcher.consumers.foreach(_.failure(api.TcpErrorClosed(reason)))
-          context become whenClosed.receive(state)
+          val error = api.TcpErrorClosed(reason)
+          state.eventsDispatcher.consumers.foreach(_.failure(error))
+          context become whenClosed.receive(state, error)
       }
 
       private def handleTcpReceived(state: XmppStreamState.Connected): Receive = {
@@ -282,10 +295,8 @@ object XmppStream {
 
             val (resolvers, state3) = xmppEvents.foldLeft((Queue.empty[() => Unit], state2)) {
               case ((resolversAcc, stateIn), StreamEvent.LocalError(xmppStreamError)) =>
-                val (failTheRestResolver, stateOut) = stateIn.usingEventsDispatcher { ed =>
-                    (() => ed.consumers.foreach(_.failure(xmppStreamError)), ed)
-                  }
-                (resolversAcc.enqueue(failTheRestResolver), stateOut.withInputStreamFailure(xmppStreamError))
+                val (failTheRestResolver, stateOut) = stateIn.usingEventsDispatcher(_.failAllConsumers(xmppStreamError))
+                (resolversAcc ++ failTheRestResolver.toTraversable, stateOut.withInputStreamFailure(xmppStreamError))
 
               case ((resolversAcc, stateIn), streamEvent) =>
                 val (resolverOption, stateOut) = stateIn.usingEventsDispatcher(_.addEvent(streamEvent))
@@ -296,8 +307,9 @@ object XmppStream {
             receive(state3)
           } recover {
             case e: Exception =>
-              state.eventsDispatcher.consumers.foreach(_.failure(e))
-              receive(state.withInputStreamFailure(e))
+              val (resolverOption, stateNext) = state.usingEventsDispatcher(_.failAllConsumers(e))
+              resolverOption.foreach(_.apply())
+              receive(stateNext.withInputStreamFailure(e))
           }
 
           context become nextReceive

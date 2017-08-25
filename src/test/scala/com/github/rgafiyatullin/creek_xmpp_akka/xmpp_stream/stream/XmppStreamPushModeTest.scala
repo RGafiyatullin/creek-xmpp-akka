@@ -9,6 +9,7 @@ import akka.io.{IO, Tcp}
 import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xml.common.{Attribute, QName}
 import com.github.rgafiyatullin.creek_xml.dom.Element
+import com.github.rgafiyatullin.creek_xmpp.protocol.stanzas.jabber_client.IQ
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.{BinaryXml, PlainXml}
@@ -20,12 +21,12 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.reflect.ClassTag
+import scala.util.Try
 
 class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
-
-  org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
-    .asInstanceOf[ch.qos.logback.classic.Logger]
-    .setLevel(ch.qos.logback.classic.Level.DEBUG)
+  Try(
+    org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
+      .asInstanceOf[ch.qos.logback.classic.Logger].setLevel(ch.qos.logback.classic.Level.DEBUG))
 
   implicit val timeout: Timeout = 5.seconds
 
@@ -318,6 +319,23 @@ class XmppStreamPushModeTest extends FlatSpec with Matchers with ScalaFutures {
         StreamEvent.StreamOpen(Seq(Attribute.NsImport("stream", "http://etherx.jabber.org/streams"))) <- server.receiveStreamEvent()
       } yield ()
     }
+  }
+
+  they should "a series of events should be buffered even after the connection is closed"
+  withClientAndServer { case (actorSystem, client, server) =>
+    implicit val ec: ExecutionContext = actorSystem.dispatcher
+
+    for {
+      _ <- client.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+      _ <- client.sendStreamEvent(StreamEvent.Stanza(IQ.create(IQ.Result).setId(UUID.randomUUID().toString)))
+      _ <- client.sendStreamEvent(StreamEvent.StreamClose())
+      _ <- client.terminate()
+
+      streamOpen <- server.receiveStreamEvent()
+      stanzaIQ <- server.receiveStreamEvent()
+      streamClose <- server.receiveStreamEvent()
+      _ <- server.terminate()
+    } yield ()
   }
 
 

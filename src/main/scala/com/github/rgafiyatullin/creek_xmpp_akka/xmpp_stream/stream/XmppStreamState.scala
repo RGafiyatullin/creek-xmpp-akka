@@ -56,6 +56,9 @@ object XmppStreamState {
 
       override def addConsumer(consumer: Promise[A]) =
         (None, copy(consumers = consumers.enqueue(consumer)))
+
+      def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A]) =
+        (Some(() => consumers.foreach(_.failure(reason))), this)
     }
 
 
@@ -69,6 +72,9 @@ object XmppStreamState {
         (None, EventsDeficit(Queue(consumer)))
 
       override def consumers = Seq.empty
+
+      def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A]) =
+        (None, this)
     }
 
 
@@ -93,6 +99,8 @@ object XmppStreamState {
       }
 
       override def consumers = Seq.empty
+
+      def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A]) = (None, this)
     }
   }
 
@@ -101,6 +109,7 @@ object XmppStreamState {
     def addConsumer(consumer: Promise[A]): (Option[() => Unit], EventsDispatcher[A])
 
     def consumers: Seq[Promise[A]]
+    def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A])
   }
 
 

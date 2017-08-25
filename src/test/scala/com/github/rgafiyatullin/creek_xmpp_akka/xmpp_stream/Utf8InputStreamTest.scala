@@ -37,6 +37,7 @@ class Utf8InputStreamTest extends FlatSpec with Matchers {
     val charsFinal = isOut.out._1.map(chars.enqueue).getOrElse(chars)
 
     charsFinal.mkString should be (s)
+    ()
   }
 
   it should "cope with single ascii char" in {

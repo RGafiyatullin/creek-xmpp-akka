@@ -20,12 +20,13 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.Promise
 import scala.concurrent.duration._
+import scala.util.Try
 
 
 class XmppStream2Test extends FlatSpec with Matchers with ScalaFutures {
-  org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
-    .asInstanceOf[ch.qos.logback.classic.Logger]
-    .setLevel(ch.qos.logback.classic.Level.DEBUG)
+  Try(
+    org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME)
+      .asInstanceOf[ch.qos.logback.classic.Logger].setLevel(ch.qos.logback.classic.Level.DEBUG))
 
   implicit val defaultPatience =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(500, Millis))
