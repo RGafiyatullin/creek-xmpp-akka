@@ -33,17 +33,23 @@ sealed trait XmppStreamState {
 
 object XmppStreamState {
 
+  sealed trait EventsDispatcher[A] {
+    def addEvent(event: A): (Option[() => Unit], EventsDispatcher[A])
+    def addConsumer(consumer: Promise[A]): (Option[() => Unit], EventsDispatcher[A])
+
+    def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A])
+  }
+
   object EventsDispatcher {
     def create[Event]: EventsDispatcher[Event] = Equilibrium[Event]()
 
-
-    final case class EventsDeficit[A](
+    private final case class EventsDeficit[A](
       consumers: Queue[Promise[A]])
         extends EventsDispatcher[A]
     {
       assert(consumers.nonEmpty)
 
-      override def addEvent(event: A) = {
+      override def addEvent(event: A): (Option[() => Unit], EventsDispatcher[A]) = {
         val head = consumers.head
         val tail = consumers.tail
         val resolveFunction = () => { head.success(event); ()}
@@ -54,7 +60,7 @@ object XmppStreamState {
         (Some(resolveFunction), nextDispatcher)
       }
 
-      override def addConsumer(consumer: Promise[A]) =
+      override def addConsumer(consumer: Promise[A]): (Option[() => Unit], EventsDispatcher[A]) =
         (None, copy(consumers = consumers.enqueue(consumer)))
 
       def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A]) =
@@ -62,32 +68,30 @@ object XmppStreamState {
     }
 
 
-    final case class Equilibrium[A]()
+    private final case class Equilibrium[A]()
       extends EventsDispatcher[A]
     {
-      override def addEvent(event: A) =
+      override def addEvent(event: A): (Option[() => Unit], EventsDispatcher[A]) =
         (None, EventsExcess(Queue(event)))
 
-      override def addConsumer(consumer: Promise[A]) =
+      override def addConsumer(consumer: Promise[A]): (Option[() => Unit], EventsDispatcher[A]) =
         (None, EventsDeficit(Queue(consumer)))
-
-      override def consumers = Seq.empty
 
       def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A]) =
         (None, this)
     }
 
 
-    final case class EventsExcess[A](
+    private final case class EventsExcess[A](
       events: Queue[A])
         extends EventsDispatcher[A]
     {
       assert(events.nonEmpty)
 
-      override def addEvent(event: A) =
+      override def addEvent(event: A): (Option[() => Unit], EventsDispatcher[A]) =
         (None, copy(events = events.enqueue(event)))
 
-      override def addConsumer(consumer: Promise[A]) = {
+      override def addConsumer(consumer: Promise[A]): (Option[() => Unit], EventsDispatcher[A]) = {
         val head = events.head
         val tail = events.tail
         val resolveFunction = () => { consumer.success(head); () }
@@ -98,19 +102,11 @@ object XmppStreamState {
         (Some(resolveFunction), nextDispatcher)
       }
 
-      override def consumers = Seq.empty
-
       def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A]) = (None, this)
     }
   }
 
-  sealed trait EventsDispatcher[A] {
-    def addEvent(event: A): (Option[() => Unit], EventsDispatcher[A])
-    def addConsumer(consumer: Promise[A]): (Option[() => Unit], EventsDispatcher[A])
 
-    def consumers: Seq[Promise[A]]
-    def failAllConsumers(reason: Throwable): (Option[() => Unit], EventsDispatcher[A])
-  }
 
 
 

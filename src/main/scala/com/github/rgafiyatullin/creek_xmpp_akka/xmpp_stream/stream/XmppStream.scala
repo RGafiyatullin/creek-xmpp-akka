@@ -220,7 +220,8 @@ object XmppStream {
 
       private def handleTerminate(state: XmppStreamState.Connected): Receive = {
         case api.Terminate() =>
-          state.eventsDispatcher.consumers.foreach(_.failure(api.TerminationRequested(sender())))
+          val (resolverOption, _) = state.usingEventsDispatcher(_.failAllConsumers(api.TerminationRequested(sender)))
+          resolverOption.foreach(_.apply())
           sender() ! Status.Success(())
           context stop self
           context become stdReceive.discard
@@ -262,15 +263,17 @@ object XmppStream {
       private def handleTcpPeerClosed(state: XmppStreamState.Connected): Receive = {
         case Tcp.PeerClosed =>
           val error = api.TcpPeerClosed()
-          state.eventsDispatcher.consumers.foreach(_.failure(error))
-          context become whenClosed.receive(state, error)
+          val (resolverOption, stateNext) = state.usingEventsDispatcher(_.failAllConsumers(error))
+          resolverOption.foreach(_.apply())
+          context become whenClosed.receive(stateNext, error)
       }
 
       private def handleTcpError(state: XmppStreamState.Connected): Receive = {
         case Tcp.ErrorClosed(reason) =>
           val error = api.TcpErrorClosed(reason)
-          state.eventsDispatcher.consumers.foreach(_.failure(error))
-          context become whenClosed.receive(state, error)
+          val (resolverOption, stateNext) = state.usingEventsDispatcher(_.failAllConsumers(error))
+          resolverOption.foreach(_.apply())
+          context become whenClosed.receive(stateNext, error)
       }
 
       private def handleTcpReceived(state: XmppStreamState.Connected): Receive = {

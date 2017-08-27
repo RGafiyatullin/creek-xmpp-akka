@@ -1,6 +1,5 @@
-package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream
+package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream
 
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStreamState
 import org.scalatest.FlatSpec
 import org.scalatest.concurrent.ScalaFutures
 
@@ -18,8 +17,8 @@ object XmppStreamStateEventsDispatcherTest {
 class XmppStreamStateEventsDispatcherTest extends FlatSpec with ScalaFutures {
   "dispatcher" should "work" in {
     implicit val ec = scala.concurrent.ExecutionContext.global
-    import XmppStreamStateEventsDispatcherTest.ADT
     import XmppStreamState.EventsDispatcher
+    import XmppStreamStateEventsDispatcherTest.ADT
 
     val disp0 = EventsDispatcher.create[ADT]
     val (None, disp1) = disp0.addEvent(ADT.A)
