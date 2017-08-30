@@ -1,0 +1,10 @@
+
+digraph "XmppStreamActor states" {
+    Initial -> Connecting [label="Api.Connect"]
+    Initial -> Connected [label="Api.FromConnection"]
+    Connecting -> Connected [label="Tcp.Connected"]
+    Connecting -> Failed [label="Tcp.CommandFailed"]
+    Connecting -> Failed [label="Api.ConnectCancel"]
+    Connected -> Disconnected [label="Api.Disconnect"]
+}
+
