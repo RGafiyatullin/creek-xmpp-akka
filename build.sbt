@@ -1,7 +1,7 @@
 
 name := "creek-xmpp-akka"
 
-version := "0.3.0.2"
+version := "0.3.0.3"
 
 scalaVersion in ThisBuild := "2.11.8"
 val akkaVersion = "2.4.4"
@@ -29,6 +29,7 @@ credentials += Credentials(Path.userHome / ".ivy2" / ".credentials.local")
 libraryDependencies ++= Seq(
   "org.scalatest"       %% "scalatest"        % "3.0.4",
   "com.typesafe.akka"   %% "akka-actor"       % akkaVersion,
+  "com.typesafe.akka"   %% "akka-stream"      % akkaVersion,
   "com.typesafe.akka"   %% "akka-slf4j"       % akkaVersion,
   "com.typesafe.akka"   %% "akka-testkit"     % akkaVersion,
   "ch.qos.logback"      %  "logback-classic"  % "1.1.3",
