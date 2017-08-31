@@ -1,4 +1,4 @@
-package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows
+package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows_0
 
 import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.util.XmppServerUtil
@@ -9,7 +9,7 @@ import org.scalatest.time.{Millis, Seconds, Span}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-class XmppProtocolFlowsTest extends FlatSpec with Matchers with ScalaFutures with XmppServerUtil {
+class XmppClientProtocolFlowsTest extends FlatSpec with Matchers with ScalaFutures with XmppServerUtil {
   implicit val timeout: Timeout = 5.seconds
 
   implicit val defaultPatience: PatienceConfig =

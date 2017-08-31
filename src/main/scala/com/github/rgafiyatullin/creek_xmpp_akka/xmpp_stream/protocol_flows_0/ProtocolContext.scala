@@ -1,4 +1,4 @@
-package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows
+package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows_0
 
 import scala.collection.immutable.Queue
 import scala.reflect.ClassTag

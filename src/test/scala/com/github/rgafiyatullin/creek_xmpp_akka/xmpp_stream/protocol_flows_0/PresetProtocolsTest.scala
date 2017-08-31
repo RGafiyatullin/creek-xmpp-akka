@@ -1,4 +1,4 @@
-package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows
+package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows_0
 
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{FlatSpec, Matchers}
