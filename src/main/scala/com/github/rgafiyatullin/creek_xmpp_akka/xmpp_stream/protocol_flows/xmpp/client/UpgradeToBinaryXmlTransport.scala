@@ -21,8 +21,9 @@ object UpgradeToBinaryXmlTransport {
 final case class UpgradeToBinaryXmlTransport
   (xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
   (implicit timeout: Timeout)
-    extends XmppClientProtocol[UpgradeToBinaryXmlTransport]
+    extends XmppClientProtocol
 {
+  override type Self = UpgradeToBinaryXmlTransport
   import UpgradeToBinaryXmlTransport._
 
   override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): UpgradeToBinaryXmlTransport = copy(xmppClientProtocolInternals = b)

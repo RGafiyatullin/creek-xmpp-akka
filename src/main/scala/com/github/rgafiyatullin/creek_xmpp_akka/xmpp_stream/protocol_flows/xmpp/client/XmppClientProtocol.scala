@@ -31,7 +31,9 @@ object XmppClientProtocol {
       (node select qName).headOption
   }
 
-  case class AlwaysComplete(xmppClientProtocolInternals: Internals = Internals.empty) extends XmppClientProtocol[AlwaysComplete] {
+  case class AlwaysComplete(xmppClientProtocolInternals: Internals = Internals.empty) extends XmppClientProtocol {
+    override type Self = AlwaysComplete
+
     override def withXmppClientProtocolInternals(b: Internals): AlwaysComplete = copy(xmppClientProtocolInternals = b)
 
     override protected def process[In1 <: XmppStream]
@@ -41,7 +43,9 @@ object XmppClientProtocol {
       Future.successful(context.complete)
   }
 
-  case class FailWithStreamError(xmppStreamError: XmppStreamError, xmppClientProtocolInternals: Internals = Internals.empty) extends XmppClientProtocol[FailWithStreamError] {
+  case class FailWithStreamError(xmppStreamError: XmppStreamError, xmppClientProtocolInternals: Internals = Internals.empty) extends XmppClientProtocol {
+    override type Self = FailWithStreamError
+
     override def withXmppClientProtocolInternals(b: Internals): FailWithStreamError = copy(xmppClientProtocolInternals = b)
 
     override protected def process[In1 <: XmppStream]
@@ -52,7 +56,7 @@ object XmppClientProtocol {
   }
 }
 
-trait XmppClientProtocol[Self <: XmppClientProtocol[Self]] extends XmppProtocol[Self] {
+trait XmppClientProtocol extends XmppProtocol {
   import XmppClientProtocol.Internals
 
   override def xmppProtocolInternals: XmppProtocol.Internals = xmppClientProtocolInternals.xmppProtocolInternals

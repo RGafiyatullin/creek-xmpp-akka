@@ -37,7 +37,7 @@ object SaslAuth {
   }
 
 
-  trait SaslAuthenticationClientProtocol[Self <: SaslAuthenticationClientProtocol[Self]] extends XmppClientProtocol[Self] {
+  trait SaslAuthenticationClientProtocol extends XmppClientProtocol {
     def hasSaslMechanism(context: Protocol.Context[XmppStream], mechanism: String): Option[Node] =
       features.feature(context, names.qNameSaslMechanismsFeature)
         .flatMap(_.children.collectFirst { case node: Node if node.text == mechanism => node })
@@ -46,8 +46,10 @@ object SaslAuth {
   final case class PlainText
     (username: String = "", password: String = "", xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
     (implicit timeout: Timeout)
-      extends SaslAuthenticationClientProtocol[PlainText]
+      extends SaslAuthenticationClientProtocol
   {
+    override type Self = PlainText
+
     override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): PlainText =
       copy(xmppClientProtocolInternals = b)
 

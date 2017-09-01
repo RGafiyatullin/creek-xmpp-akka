@@ -1,6 +1,6 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.common
 
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.{ProtocolBase, Protocol}
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 
 object XmppProtocol {
@@ -13,7 +13,7 @@ object XmppProtocol {
   }
 }
 
-trait XmppProtocol[Self <: XmppProtocol[Self]] extends Protocol[Self, XmppStream, XmppStream] {
+trait XmppProtocol extends Protocol[XmppStream, XmppStream] {
   type Ctx[AnXmppStream <: XmppStream] = Protocol.Context[AnXmppStream]
 
   override def protocolInternals: Protocol.Internals = xmppProtocolInternals.protocolInternals

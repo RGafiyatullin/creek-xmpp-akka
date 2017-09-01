@@ -24,11 +24,13 @@ final case class XmppClientStreamOpen
     transportFactoryOption: Option[XmppTransportFactory] = None,
     xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
   (implicit timeout: Timeout)
-    extends XmppClientProtocol[XmppClientStreamOpen]
+    extends XmppClientProtocol
 {
+  override type Self = XmppClientStreamOpen
+
   import XmppClientStreamOpen.{LocalStreamAttributes, RemoteStreamAttributes}
 
-  override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): XmppClientStreamOpen = copy(xmppClientProtocolInternals = b)
+  override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): Self = copy(xmppClientProtocolInternals = b)
 
   private def resetStreams: ResetStreams =
     transportFactoryOption.fold(ResetStreams.BeforeWrite())(ResetStreams.BeforeWrite(_))

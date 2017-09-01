@@ -87,9 +87,15 @@ object Protocol {
   }
 
 
-  final case class AlwaysComplete[Out](value: Out)
-    extends ProtocolBase[Any, Out]
+  
+  final case class AlwaysComplete[+Out](value: Out, protocolInternals: Internals = Internals.empty)
+    extends Protocol[Any, Out]
   {
+    override type Self = AlwaysComplete[Out]
+
+    override def withProtocolInternals(i: Internals): Self =
+      copy(protocolInternals = i)
+
     override protected def process[In1 <: Any]
       (context: Context[In1])
       (implicit ec: ExecutionContext)
@@ -97,9 +103,14 @@ object Protocol {
       Future.successful(context.complete(value))
   }
 
-  final case class AlwaysReject[In]()
-    extends ProtocolBase[In, Nothing]
+  final case class AlwaysReject[In](protocolInternals: Internals = Internals.empty)
+    extends Protocol[In, Nothing]
   {
+    override type Self = AlwaysReject[In]
+
+    override def withProtocolInternals(i: Internals): Self =
+      copy(protocolInternals = i)
+
     override protected def process[In1 <: In]
       (context: Context[In1])
       (implicit ec: ExecutionContext)
@@ -107,9 +118,14 @@ object Protocol {
       Future.successful(context.reject())
   }
 
-  final case class AlwaysFail(reason: Throwable)
-    extends ProtocolBase[Any, Nothing]
+  final case class AlwaysFail(reason: Throwable, protocolInternals: Internals = Internals.empty)
+    extends Protocol[Any, Nothing]
   {
+    override type Self = AlwaysFail
+
+    override def withProtocolInternals(i: Internals): Self =
+      copy(protocolInternals = i)
+
     override protected def process[In1 <: Any]
       (context: Context[In1])
       (implicit ec: ExecutionContext)
@@ -118,9 +134,14 @@ object Protocol {
   }
 
   final case class OrElse[In, Out]
-    (left: ProtocolBase[In, Out], right: ProtocolBase[In, Out])
-    extends ProtocolBase[In, Out]
+    (left: Protocol[In, Out], right: Protocol[In, Out], protocolInternals: Internals = Internals.empty)
+    extends Protocol[In, Out]
   {
+    override type Self = OrElse[In, Out]
+
+    override def withProtocolInternals(i: Internals): Self =
+      copy(protocolInternals = i)
+
     override protected def process[In1 <: In]
       (context: Context[In1])
       (implicit ec: ExecutionContext)
@@ -145,9 +166,14 @@ object Protocol {
   }
 
   final case class AndThen[-In, Interim, +Out]
-    (left: ProtocolBase[In, Interim], right: ProtocolBase[Interim, Out])
-    extends ProtocolBase[In, Out]
+    (left: Protocol[In, Interim], right: Protocol[Interim, Out], protocolInternals: Internals = Internals.empty)
+    extends Protocol[In, Out]
   {
+    type Self = AndThen[In, Interim, Out]
+
+    override def withProtocolInternals(i: Internals): Self =
+      copy(protocolInternals = i)
+
     override protected def process[In1 <: In]
       (context: Context[In1])
       (implicit ec: ExecutionContext)
@@ -186,16 +212,21 @@ object Protocol {
   final case class Internals()
 }
 
-sealed trait ProtocolBase[-In, +Out] {
+trait Protocol[-In, +Out] {
+  type Self
+
+  def protocolInternals: Protocol.Internals
+  def withProtocolInternals(i: Protocol.Internals): Self
+
   import Protocol.{Context, ProcessResult}
   import Protocol.{OrElse, AndThen}
 
   protected def process[In1 <: In](context: Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, Out]]
 
-  def orElse[In1 <: In, Out1 >: Out](other: ProtocolBase[In1, Out1]): ProtocolBase[In1, Out1] =
+  def orElse[In1 <: In, Out1 >: Out](other: Protocol[In1, Out1]): Protocol[In1, Out1] =
     OrElse(this, other)
 
-  def andThen[OutNext, Interim >: Out](other: ProtocolBase[Interim, OutNext]): ProtocolBase[In, OutNext] =
+  def andThen[OutNext, Interim >: Out](other: Protocol[Interim, OutNext]): Protocol[In, OutNext] =
     AndThen[In, Interim, OutNext](this, other)
 
   private def recoverToResult[In1 <: In](context: Context[In1]): PartialFunction[Throwable, ProcessResult[In1, Out]] = {
@@ -213,10 +244,5 @@ sealed trait ProtocolBase[-In, +Out] {
     }
       .recover(recoverToResultFuture(context))
       .get
-}
-
-trait Protocol[Self <: Protocol[Self, In, Out], -In, +Out] extends ProtocolBase[In, Out] {
-  def protocolInternals: Protocol.Internals
-  def withProtocolInternals(i: Protocol.Internals): Self
 }
 
