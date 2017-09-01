@@ -1,21 +1,28 @@
-package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp
+package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.client
 
 import java.nio.charset.Charset
+import java.util.Base64
 
 import akka.util.Timeout
-import com.github.rgafiyatullin.creek_xml.common.QName
+import com.github.rgafiyatullin.creek_xml.common.{Attribute, QName}
 import com.github.rgafiyatullin.creek_xml.dom.{CData, Element, Node}
-import com.github.rgafiyatullin.creek_xmpp.protocol.XmppConstants
 import com.github.rgafiyatullin.creek_xmpp.protocol.stream_error.XmppStreamError
-import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol.ProcessResult
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase.ProcessResult
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 
 import scala.concurrent.{ExecutionContext, Future}
 
 object SaslAuth {
-  val csUtf8: Charset = Charset.forName("UTF-8")
+  sealed trait Mechanism
+  object Mechanism {
+    case object Plain extends Mechanism
+  }
+
+  final case class Identity(id: String, viaMechanism: Mechanism) extends XmppClientProtocol.Artifact
+
+
+  private val csUtf8: Charset = Charset.forName("UTF-8")
 
   object names {
     val ns: String = "urn:ietf:params:xml:ns:xmpp-sasl"
@@ -31,25 +38,28 @@ object SaslAuth {
   }
 
 
-  trait SaslAuthenticationClientProtocol extends XmppClientProtocol {
-    def hasSaslMechanism(context: Protocol.Context[XmppStream], mechanism: String): Option[Node] =
+  trait SaslAuthenticationClientProtocol[Self <: SaslAuthenticationClientProtocol[Self]] extends XmppClientProtocol[Self] {
+    def hasSaslMechanism(context: ProtocolBase.Context[XmppStream], mechanism: String): Option[Node] =
       features.feature(context, names.qNameSaslMechanismsFeature)
         .flatMap(_.children.collectFirst { case node: Node if node.text == mechanism => node })
   }
 
   final case class PlainText
-    (username: String, password: String)
+    (username: String = "", password: String = "", xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
     (implicit timeout: Timeout)
-      extends SaslAuthenticationClientProtocol
+      extends SaslAuthenticationClientProtocol[PlainText]
   {
+    override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): PlainText =
+      copy(xmppClientProtocolInternals = b)
+
     def withUsername(u: String): PlainText = copy(username = u)
     def withPassword(p: String): PlainText = copy(password = p)
 
-    private def hasFeature(context: Protocol.Context[XmppStream]): Boolean =
+    private def hasFeature(context: ProtocolBase.Context[XmppStream]): Boolean =
       hasSaslMechanism(context, names.mechanisms.plain).isDefined
 
     private def ifHasFeature[In1 <: XmppStream]
-      (context: Protocol.Context[In1])
+      (context: ProtocolBase.Context[In1])
       (doIt: => Future[ProcessResult[In1, XmppStream]])
     : Future[ProcessResult[In1, XmppStream]] =
       if (!hasFeature(context))
@@ -63,19 +73,25 @@ object SaslAuth {
       val passwordBytes = password.getBytes(csUtf8)
 
       val packed = zero ++ usernameBytes ++ zero ++ passwordBytes
-      CData(new String(packed, csUtf8))
+      val b64encoder = Base64.getEncoder
+      val encoded = b64encoder.encodeToString(packed)
+      CData(encoded)
     }
-    private def authenticateRequest: Node = Element(names.qNameAuth, Seq(), Seq(authenticateCData))
+    private def authenticateRequest: Node =
+      Element(
+        names.qNameAuth,
+        Seq(Attribute.Unprefixed("mechanism", names.mechanisms.plain)),
+        Seq(authenticateCData))
 
     override protected def process[In1 <: XmppStream]
-      (context: Protocol.Context[In1])
+      (context: ProtocolBase.Context[In1])
       (implicit ec: ExecutionContext)
-    : Future[Protocol.ProcessResult[In1, XmppStream]] = {
+    : Future[ProtocolBase.ProcessResult[In1, XmppStream]] = {
       val xmppStream = context.value
 
       ifHasFeature(context)(negotiation.run(context, authenticateRequest) {
         case names.qNameSuccess => (_) =>
-          XmppClientStreamOpen(Seq.empty).run(context)
+          streams.reopen(context.addArtifact(Identity(username, Mechanism.Plain)))
 
         case names.qNameFailure => (failureResponseXml) =>
           Future.successful(

@@ -1,13 +1,13 @@
-package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp
+package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.client
 
 import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xml.common.Attribute
 import com.github.rgafiyatullin.creek_xmpp.protocol.XmppConstants
 import com.github.rgafiyatullin.creek_xmpp.protocol.stream_error.XmppStreamError
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol.ProcessResult
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.XmppClientProtocol.StreamFeatures
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase.ProcessResult
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.client.XmppClientProtocol.StreamFeatures
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.XmppTransportFactory
@@ -15,21 +15,26 @@ import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.XmppTrans
 import scala.concurrent.{ExecutionContext, Future}
 
 object XmppClientStreamOpen {
-  final case class LocalStreamAttributes(attributes: Seq[Attribute]) extends Protocol.Artifact
-  final case class RemoteStreamAttributes(attributes: Seq[Attribute]) extends Protocol.Artifact
+  final case class LocalStreamAttributes(attributes: Seq[Attribute]) extends XmppClientProtocol.Artifact
+  final case class RemoteStreamAttributes(attributes: Seq[Attribute]) extends XmppClientProtocol.Artifact
 }
 
 final case class XmppClientStreamOpen
-  (attributes: Seq[Attribute], transportFactoryOption: Option[XmppTransportFactory] = None)
+  (
+    attributes: Seq[Attribute] = Seq.empty,
+    transportFactoryOption: Option[XmppTransportFactory] = None,
+    xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
   (implicit timeout: Timeout)
-    extends XmppClientProtocol
+    extends XmppClientProtocol[XmppClientStreamOpen]
 {
   import XmppClientStreamOpen.{LocalStreamAttributes, RemoteStreamAttributes}
+
+  override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): XmppClientStreamOpen = copy(xmppClientProtocolInternals = b)
 
   private def resetStreams: ResetStreams =
     transportFactoryOption.fold(ResetStreams.BeforeWrite())(ResetStreams.BeforeWrite(_))
 
-  override protected def process[In1 <: XmppStream](context: Protocol.Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, XmppStream]] = {
+  override protected def process[In1 <: XmppStream](context: ProtocolBase.Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, XmppStream]] = {
     val xmppStream = context.value
     for {
       _ <- xmppStream.expectConnected()

@@ -5,22 +5,30 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.Try
 
-object Protocol {
+object ProtocolBase {
   trait Artifact
 
-  final case class Common(artifacts: Seq[Artifact] = Queue.empty[Artifact]) {
-    def withArtifacts(a: Seq[Artifact]): Common =
-      copy(artifacts = a)
-  }
-
   object Context {
-    def create[A](value: A): Context[A] = Context(value, Common())
+    final case class Internals(artifacts: Seq[Artifact] = Queue.empty[Artifact]) {
+      def withArtifacts(a: Seq[Artifact]): Internals =
+        copy(artifacts = a)
+    }
+
+    def create[A](value: A): Context[A] = Context(value, Internals())
   }
 
-  final case class Context[+A](value: A, common: Common) {
+  final case class Context[+A](value: A, contextInternals: Context.Internals) {
+    def withContextInternals(c: Context.Internals): Context[A] =
+      copy(contextInternals = c)
 
     def artifacts[T <: Artifact](implicit classTag: ClassTag[T]): Seq[T] =
-      common.artifacts.collect { case a: T => a }
+      contextInternals.artifacts.collect { case a: T => a }
+
+    def addArtifact(a: ProtocolBase.Artifact): Context[A] =
+      withContextInternals(contextInternals.withArtifacts(contextInternals.artifacts :+ a))
+
+
+
 
     def fail(reason: Throwable): ProcessResult[Nothing, Nothing] =
       ProcessResult.Failed(reason)
@@ -29,16 +37,10 @@ object Protocol {
       ProcessResult.Rejected(this)
 
     def complete[B](result: B): ProcessResult[Nothing, B] =
-      ProcessResult.Complete(Context.create(result).withCommon(common))
+      ProcessResult.Complete(Context.create(result).withContextInternals(contextInternals))
 
     def complete: ProcessResult[Nothing, A] =
       ProcessResult.Complete(this)
-
-    def withCommon(c: Common): Context[A] =
-      copy(common = c)
-
-    def addArtifact(a: Protocol.Artifact): Context[A] =
-      withCommon(common.withArtifacts(common.artifacts :+ a))
   }
 
   sealed trait ProcessResult[+In, +Out] {
@@ -86,7 +88,7 @@ object Protocol {
 
 
   final case class AlwaysComplete[Out](value: Out)
-    extends Protocol[Any, Out]
+    extends ProtocolBase[Any, Out]
   {
     override protected def process[In1 <: Any]
       (context: Context[In1])
@@ -96,7 +98,7 @@ object Protocol {
   }
 
   final case class AlwaysReject[In]()
-    extends Protocol[In, Nothing]
+    extends ProtocolBase[In, Nothing]
   {
     override protected def process[In1 <: In]
       (context: Context[In1])
@@ -106,7 +108,7 @@ object Protocol {
   }
 
   final case class AlwaysFail(reason: Throwable)
-    extends Protocol[Any, Nothing]
+    extends ProtocolBase[Any, Nothing]
   {
     override protected def process[In1 <: Any]
       (context: Context[In1])
@@ -116,8 +118,8 @@ object Protocol {
   }
 
   final case class OrElse[In, Out]
-    (left: Protocol[In, Out], right: Protocol[In, Out])
-    extends Protocol[In, Out]
+    (left: ProtocolBase[In, Out], right: ProtocolBase[In, Out])
+    extends ProtocolBase[In, Out]
   {
     override protected def process[In1 <: In]
       (context: Context[In1])
@@ -143,8 +145,8 @@ object Protocol {
   }
 
   final case class AndThen[-In, Interim, +Out]
-    (left: Protocol[In, Interim], right: Protocol[Interim, Out])
-    extends Protocol[In, Out]
+    (left: ProtocolBase[In, Interim], right: ProtocolBase[Interim, Out])
+    extends ProtocolBase[In, Out]
   {
     override protected def process[In1 <: In]
       (context: Context[In1])
@@ -177,18 +179,23 @@ object Protocol {
       }
         yield rightResult
   }
+
+  object Internals {
+    def empty: Internals = Internals()
+  }
+  final case class Internals()
 }
 
-trait Protocol[-In, +Out] {
-  import Protocol.{Context, ProcessResult}
-  import Protocol.{OrElse, AndThen}
+trait ProtocolBase[-In, +Out] {
+  import ProtocolBase.{Context, ProcessResult}
+  import ProtocolBase.{OrElse, AndThen}
 
   protected def process[In1 <: In](context: Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, Out]]
 
-  def orElse[In1 <: In, Out1 >: Out](other: Protocol[In1, Out1]): Protocol[In1, Out1] =
+  def orElse[In1 <: In, Out1 >: Out](other: ProtocolBase[In1, Out1]): ProtocolBase[In1, Out1] =
     OrElse(this, other)
 
-  def andThen[OutNext, Interim >: Out](other: Protocol[Interim, OutNext]): Protocol[In, OutNext] =
+  def andThen[OutNext, Interim >: Out](other: ProtocolBase[Interim, OutNext]): ProtocolBase[In, OutNext] =
     AndThen[In, Interim, OutNext](this, other)
 
   private def recoverToResult[In1 <: In](context: Context[In1]): PartialFunction[Throwable, ProcessResult[In1, Out]] = {
@@ -206,5 +213,10 @@ trait Protocol[-In, +Out] {
     }
       .recover(recoverToResultFuture(context))
       .get
-
 }
+
+trait Protocol[Self <: Protocol[Self, In, Out], -In, +Out] extends ProtocolBase[In, Out] {
+  def protocolInternals: ProtocolBase.Internals
+  def withProtocolInternals(i: ProtocolBase.Internals): Self
+}
+
