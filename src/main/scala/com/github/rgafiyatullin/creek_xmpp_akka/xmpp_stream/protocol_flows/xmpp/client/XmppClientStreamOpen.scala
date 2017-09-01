@@ -5,8 +5,7 @@ import com.github.rgafiyatullin.creek_xml.common.Attribute
 import com.github.rgafiyatullin.creek_xmpp.protocol.XmppConstants
 import com.github.rgafiyatullin.creek_xmpp.protocol.stream_error.XmppStreamError
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase.ProcessResult
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.client.XmppClientProtocol.StreamFeatures
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
@@ -34,7 +33,7 @@ final case class XmppClientStreamOpen
   private def resetStreams: ResetStreams =
     transportFactoryOption.fold(ResetStreams.BeforeWrite())(ResetStreams.BeforeWrite(_))
 
-  override protected def process[In1 <: XmppStream](context: ProtocolBase.Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, XmppStream]] = {
+  override protected def process[In1 <: XmppStream](context: Protocol.Context[In1])(implicit ec: ExecutionContext): Future[Protocol.ProcessResult[In1, XmppStream]] = {
     val xmppStream = context.value
     for {
       _ <- xmppStream.expectConnected()

@@ -6,8 +6,7 @@ import com.github.rgafiyatullin.creek_xml.dom.Node
 import com.github.rgafiyatullin.creek_xmpp.protocol.XmppConstants
 import com.github.rgafiyatullin.creek_xmpp.protocol.stream_error.XmppStreamError
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase.ProcessResult
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.xmpp.common.XmppProtocol
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.XmppTransportFactory
@@ -15,7 +14,7 @@ import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.XmppTrans
 import scala.concurrent.{ExecutionContext, Future}
 
 object XmppClientProtocol {
-  trait Artifact extends ProtocolBase.Artifact
+  trait Artifact extends Protocol.Artifact
 
   object Internals {
     def empty: Internals = Internals()
@@ -36,9 +35,9 @@ object XmppClientProtocol {
     override def withXmppClientProtocolInternals(b: Internals): AlwaysComplete = copy(xmppClientProtocolInternals = b)
 
     override protected def process[In1 <: XmppStream]
-      (context: ProtocolBase.Context[In1])
+      (context: Protocol.Context[In1])
       (implicit ec: ExecutionContext)
-    : Future[ProcessResult[In1, XmppStream]] =
+    : Future[Protocol.ProcessResult[In1, XmppStream]] =
       Future.successful(context.complete)
   }
 
@@ -46,9 +45,9 @@ object XmppClientProtocol {
     override def withXmppClientProtocolInternals(b: Internals): FailWithStreamError = copy(xmppClientProtocolInternals = b)
 
     override protected def process[In1 <: XmppStream]
-      (context: ProtocolBase.Context[In1])
+      (context: Protocol.Context[In1])
       (implicit ec: ExecutionContext)
-    : Future[ProcessResult[In1, XmppStream]] =
+    : Future[Protocol.ProcessResult[In1, XmppStream]] =
       Future.successful(context.fail(xmppStreamError))
   }
 }
@@ -79,9 +78,9 @@ trait XmppClientProtocol[Self <: XmppClientProtocol[Self]] extends XmppProtocol[
   protected object negotiation {
     def run[AnXmppStream <: XmppStream]
       (context: Ctx[AnXmppStream], request: Node)
-      (handle: PartialFunction[QName, Node => Future[ProcessResult[AnXmppStream, XmppStream]]])
+      (handle: PartialFunction[QName, Node => Future[Protocol.ProcessResult[AnXmppStream, XmppStream]]])
       (implicit ec: ExecutionContext, timeout: Timeout)
-    : Future[ProcessResult[AnXmppStream, XmppStream]] =
+    : Future[Protocol.ProcessResult[AnXmppStream, XmppStream]] =
       for {
         _ <- context.value.sendStreamEvent(StreamEvent.Stanza(request))
         StreamEvent.Stanza(responseXml) <- context.value.receiveStreamEvent()
@@ -111,7 +110,7 @@ trait XmppClientProtocol[Self <: XmppClientProtocol[Self]] extends XmppProtocol[
     def reopen[AnXmppStream <: XmppStream]
     (context: Ctx[AnXmppStream], transportFactoryOption: Option[XmppTransportFactory] = None)
     (implicit ec: ExecutionContext, timeout: Timeout)
-    : Future[ProcessResult[AnXmppStream, XmppStream]] = {
+    : Future[Protocol.ProcessResult[AnXmppStream, XmppStream]] = {
       val attributesToUse =
         context
           .artifacts[XmppClientStreamOpen.LocalStreamAttributes]

@@ -57,7 +57,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
         val client = clientAndServer.client
         val server = clientAndServer.server
         val clientProtocol = protocolStreamOpenWithUpgradeToBinaryXmlTransport
-        val clientProtocolResultFuture = clientProtocol.run(ProtocolBase.Context.create(client))
+        val clientProtocolResultFuture = clientProtocol.run(Protocol.Context.create(client))
 
         for {
           _ <- server.expectConnected()
@@ -92,7 +92,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
       val server = clientAndServer.server
 
       val clientProtocol = protocolStreamOpenWithSaslPlainAuthentication
-      val clientProtocolResultFuture = clientProtocol.run(ProtocolBase.Context.create(client))
+      val clientProtocolResultFuture = clientProtocol.run(Protocol.Context.create(client))
 
       val saslAuthSuccess = Element(SaslAuth.names.qNameSuccess, Seq.empty, Seq.empty)
 
@@ -137,7 +137,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
       val server = clientAndServer.server
 
       val clientProtocol = protocolStreamOpenWithOptionalBinaryXmlTransportAndSaslPlainAuthentication
-      val clientProtocolResultFuture = clientProtocol.run(ProtocolBase.Context.create(client))
+      val clientProtocolResultFuture = clientProtocol.run(Protocol.Context.create(client))
 
       val binaryXmlProceed =
         Element(UpgradeToBinaryXmlTransport.qNameProceed, Seq.empty, Seq.empty)
@@ -184,7 +184,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
       val server = clientAndServer.server
 
       val clientProtocol = protocolStreamOpenWithOptionalBinaryXmlTransportAndSaslPlainAuthentication
-      val clientProtocolResultFuture = clientProtocol.run(ProtocolBase.Context.create(client))
+      val clientProtocolResultFuture = clientProtocol.run(Protocol.Context.create(client))
 
       val binaryXmlProceed =
         Element(UpgradeToBinaryXmlTransport.qNameProceed, Seq.empty, Seq.empty)

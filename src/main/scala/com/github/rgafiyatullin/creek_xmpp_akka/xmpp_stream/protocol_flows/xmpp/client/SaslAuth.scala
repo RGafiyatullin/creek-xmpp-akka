@@ -7,8 +7,7 @@ import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xml.common.{Attribute, QName}
 import com.github.rgafiyatullin.creek_xml.dom.{CData, Element, Node}
 import com.github.rgafiyatullin.creek_xmpp.protocol.stream_error.XmppStreamError
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase
-import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.ProtocolBase.ProcessResult
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocol_flows.Protocol
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -39,7 +38,7 @@ object SaslAuth {
 
 
   trait SaslAuthenticationClientProtocol[Self <: SaslAuthenticationClientProtocol[Self]] extends XmppClientProtocol[Self] {
-    def hasSaslMechanism(context: ProtocolBase.Context[XmppStream], mechanism: String): Option[Node] =
+    def hasSaslMechanism(context: Protocol.Context[XmppStream], mechanism: String): Option[Node] =
       features.feature(context, names.qNameSaslMechanismsFeature)
         .flatMap(_.children.collectFirst { case node: Node if node.text == mechanism => node })
   }
@@ -55,13 +54,13 @@ object SaslAuth {
     def withUsername(u: String): PlainText = copy(username = u)
     def withPassword(p: String): PlainText = copy(password = p)
 
-    private def hasFeature(context: ProtocolBase.Context[XmppStream]): Boolean =
+    private def hasFeature(context: Protocol.Context[XmppStream]): Boolean =
       hasSaslMechanism(context, names.mechanisms.plain).isDefined
 
     private def ifHasFeature[In1 <: XmppStream]
-      (context: ProtocolBase.Context[In1])
-      (doIt: => Future[ProcessResult[In1, XmppStream]])
-    : Future[ProcessResult[In1, XmppStream]] =
+      (context: Protocol.Context[In1])
+      (doIt: => Future[Protocol.ProcessResult[In1, XmppStream]])
+    : Future[Protocol.ProcessResult[In1, XmppStream]] =
       if (!hasFeature(context))
         Future.successful(context.reject())
       else
@@ -84,9 +83,9 @@ object SaslAuth {
         Seq(authenticateCData))
 
     override protected def process[In1 <: XmppStream]
-      (context: ProtocolBase.Context[In1])
+      (context: Protocol.Context[In1])
       (implicit ec: ExecutionContext)
-    : Future[ProtocolBase.ProcessResult[In1, XmppStream]] = {
+    : Future[Protocol.ProcessResult[In1, XmppStream]] = {
       val xmppStream = context.value
 
       ifHasFeature(context)(negotiation.run(context, authenticateRequest) {

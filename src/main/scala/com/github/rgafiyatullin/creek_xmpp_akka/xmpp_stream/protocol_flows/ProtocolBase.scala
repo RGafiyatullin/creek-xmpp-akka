@@ -5,7 +5,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
 import scala.util.Try
 
-object ProtocolBase {
+object Protocol {
   trait Artifact
 
   object Context {
@@ -24,7 +24,7 @@ object ProtocolBase {
     def artifacts[T <: Artifact](implicit classTag: ClassTag[T]): Seq[T] =
       contextInternals.artifacts.collect { case a: T => a }
 
-    def addArtifact(a: ProtocolBase.Artifact): Context[A] =
+    def addArtifact(a: Protocol.Artifact): Context[A] =
       withContextInternals(contextInternals.withArtifacts(contextInternals.artifacts :+ a))
 
 
@@ -186,9 +186,9 @@ object ProtocolBase {
   final case class Internals()
 }
 
-trait ProtocolBase[-In, +Out] {
-  import ProtocolBase.{Context, ProcessResult}
-  import ProtocolBase.{OrElse, AndThen}
+sealed trait ProtocolBase[-In, +Out] {
+  import Protocol.{Context, ProcessResult}
+  import Protocol.{OrElse, AndThen}
 
   protected def process[In1 <: In](context: Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, Out]]
 
@@ -216,7 +216,7 @@ trait ProtocolBase[-In, +Out] {
 }
 
 trait Protocol[Self <: Protocol[Self, In, Out], -In, +Out] extends ProtocolBase[In, Out] {
-  def protocolInternals: ProtocolBase.Internals
-  def withProtocolInternals(i: ProtocolBase.Internals): Self
+  def protocolInternals: Protocol.Internals
+  def withProtocolInternals(i: Protocol.Internals): Self
 }
 
