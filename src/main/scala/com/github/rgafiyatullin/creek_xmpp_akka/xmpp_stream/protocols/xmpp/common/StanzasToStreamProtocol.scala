@@ -1,7 +1,7 @@
 package com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocols.xmpp.common
 import akka.Done
 import akka.stream.{Materializer, QueueOfferResult}
-import akka.stream.scaladsl.{Flow, Keep, Sink, SourceQueue}
+import akka.stream.scaladsl.{Flow, Keep, Sink, SinkQueue, SourceQueue, SourceQueueWithComplete}
 import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
@@ -51,52 +51,51 @@ object StanzasToStreamProtocol {
   }
 
   final case class InboundStreamSetupSourceQueueFuture(
-    sourceQueueFuture: Future[SourceQueue[StreamEvent]])
+    sourceQueueFuture: Future[SourceQueueWithComplete[StreamEvent]],
+    onDrop: StreamEvent => Future[Boolean] = _ => Future.successful(true))
       extends InboundStreamSetup
   {
-    override def connectToXmppStream(xmppStream: XmppStream)(implicit ec: ExecutionContext): Future[Done] = {
-      val donePromise = Promise[Done]()
+    override def connectToXmppStream
+      (xmppStream: XmppStream)
+      (implicit ec: ExecutionContext)
+    : Future[Done] =
       for {
         sourceQueue <- sourceQueueFuture
-        _ = loop(xmppStream, sourceQueue, donePromise)
-        _ <- donePromise.future
+        _ = loop(xmppStream, sourceQueue)
+        Done <- sourceQueue.watchCompletion()
       }
         yield Done
-      donePromise.future
-    }
 
-    private def loop
+    def loop
       (xmppStream: XmppStream,
-       sourceQueue: SourceQueue[StreamEvent],
-       donePromise: Promise[Done])
+       sourceQueue: SourceQueueWithComplete[StreamEvent])
       (implicit ec: ExecutionContext)
     : Unit =
-      xmppStream.receiveStreamEvent()
-        .flatMap { streamEvent =>
-          sourceQueue.offer(streamEvent)
-        }
-        .map {
-          case QueueOfferResult.Enqueued =>
-            true
-          case QueueOfferResult.Dropped =>
-            throw new RuntimeException("Inbound stream event dropped")
+      for {
+        streamEvent <- xmppStream.receiveStreamEvent()
+        offerResult <- sourceQueue
+          .offer(streamEvent)
+          .recover {
+            case e: Exception =>
+              QueueOfferResult.Failure(e)
+          }
+        shouldProceed <- offerResult match {
+          case QueueOfferResult.Failure(reason) =>
+            sourceQueue.fail(reason) // TODO: rewrap the reason here?
+            Future.successful(false)
 
           case QueueOfferResult.QueueClosed =>
-            false
+            sourceQueue.complete()
+            Future.successful(false)
 
-          case QueueOfferResult.Failure(reason) =>
-            throw reason
+          case QueueOfferResult.Dropped =>
+            onDrop(streamEvent) // TODO: what if the chosen OverflowStrategy is other than DropNew?
+
+          case QueueOfferResult.Enqueued =>
+            Future.successful(true)
         }
-        .onComplete {
-          case Success(true) =>
-            loop(xmppStream, sourceQueue, donePromise)
-
-          case Success(false) =>
-            donePromise.success(Done)
-
-          case Failure(reason) =>
-            donePromise.failure(reason)
-        }
+      }
+        if (shouldProceed) loop(xmppStream, sourceQueue)
   }
 
   final case class OutboundStreamSetupEmpty()
@@ -126,6 +125,50 @@ object StanzasToStreamProtocol {
 
       sinkPromise.success(sink)
       donePromise.future
+    }
+  }
+
+  final case class OutboundStreamSetupSinkQueueFuture(sinkQueueFuture: Future[SinkQueue[StreamEvent]], sendTimeout: Timeout)
+    extends OutboundStreamSetup
+  {
+
+    private def loop
+      (donePromise: Promise[Done],
+       sinkQueue: SinkQueue[StreamEvent],
+       xmppStream: XmppStream)
+      (implicit ec: ExecutionContext)
+    : Unit =
+      sinkQueue.pull()
+        .flatMap {
+          case None =>
+            Future.successful(None)
+
+          case Some(streamEvent) =>
+            xmppStream.sendStreamEvent(streamEvent)(sendTimeout)
+            Future.successful(Some(streamEvent))
+        }
+        .onComplete {
+          case Success(None) =>
+            donePromise.success(Done)
+
+          case Success(Some(_)) =>
+            loop(donePromise, sinkQueue, xmppStream)
+
+          case Failure(reason) =>
+            donePromise.failure(reason)
+        }
+
+    override def connectToXmppStream
+      (xmppStream: XmppStream)
+      (implicit ec: ExecutionContext)
+    : Future[Done] = {
+      val donePromise = Promise[Done]()
+      for {
+        sinkQueue <- sinkQueueFuture
+        _ = loop(donePromise, sinkQueue, xmppStream)
+        Done <- donePromise.future
+      }
+        yield Done
     }
   }
 

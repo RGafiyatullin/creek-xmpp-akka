@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 
 import akka.actor.{ActorRefFactory, ActorSystem}
 import akka.stream.{ActorMaterializer, Materializer, OverflowStrategy}
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.util.Timeout
 import com.github.rgafiyatullin.creek_xml.common.{Attribute, QName}
 import com.github.rgafiyatullin.creek_xml.dom.{CData, Element}
@@ -214,7 +214,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
         yield println(clientProtocolResult)
     })
 
-  "stanza-to-stream-protocol" should "work" in
+  "stanza-to-stream-protocol" should "work with InboundStreamSetupSourceQueueFuture+OutboundStreamSetupSinkPromise" in
     futureShouldSucceed(
       withClientAndServer { case (xmppServer, clientAndServer) =>
         implicit val actorRefFactory: ActorRefFactory = ActorSystem(randomString())
@@ -262,6 +262,57 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
           _ <- server.sendStreamEvent(StreamEvent.Stanza(streamFeatures))
 
           clientOutboundEventsSourceQueue <- clientOutboundEventsSourceQueueFuture
+          _ <- server.sendStreamEvent(StreamEvent.Stanza(Element(QName("helloes", "hello"), Seq.empty, Seq.empty)))
+          _ <- clientOutboundEventsSourceQueue.offer(StreamEvent.Stanza(Element(QName("helloes", "hello-yourself"), Seq.empty, Seq.empty)))
+          StreamEvent.Stanza(helloYourself) <- server.receiveStreamEvent()
+        }
+          yield ()
+      }
+    )
+
+  it should "work InboundStreamSetupSourceQueueFuture+OutboundStreamSetupSinkQueueFuture" in
+    futureShouldSucceed(
+      withClientAndServer { case (xmppServer, clientAndServer) =>
+        implicit val actorRefFactory: ActorRefFactory = ActorSystem(randomString())
+        implicit val materializer: Materializer = ActorMaterializer()
+
+        val streamFeatures =
+          Element(XmppConstants.names.streams.features, Seq(), Seq(
+            Element(SaslAuth.names.qNameSaslMechanismsFeature, Seq.empty, Seq(
+              Element(SaslAuth.names.qNameSaslMechanism, Seq(), Seq(
+                CData("PLAIN")))))))
+
+        val clientProtocol = XmppClientStreamOpen(Seq.empty) andThen StanzasToStreamProtocol()
+
+        val client = clientAndServer.client
+        val server = clientAndServer.server
+
+        val clientInboundEventsSourceQueue =
+          Source
+            .queue[StreamEvent](10, OverflowStrategy.backpressure)
+            .to(Sink.foreach(println("INBOUND: ", _)))
+            .run()
+
+
+        val sinkQueue = Sink.queue[StreamEvent]()
+
+        val (clientOutboundEventsSourceQueue, clientOutboundEventsSinkQueue) =
+          Source
+            .queue[StreamEvent](10, OverflowStrategy.backpressure)
+            .toMat(sinkQueue)(Keep.both).run()
+
+        val clientProtocolContext0 =
+          Protocol.Context.create(client)
+            .addArtifact(StanzasToStreamProtocol.InboundStreamSetupSourceQueueFuture(Future.successful(clientInboundEventsSourceQueue)))
+            .addArtifact(StanzasToStreamProtocol.OutboundStreamSetupSinkQueueFuture(Future.successful(clientOutboundEventsSinkQueue), 5.seconds))
+
+        val clientProtocolResultFuture = clientProtocol.run(clientProtocolContext0)
+
+        for {
+          _ <- server.expectConnected()
+          StreamEvent.StreamOpen(_) <- server.receiveStreamEvent()
+          _ <- server.sendStreamEvent(StreamEvent.StreamOpen(Seq.empty))
+          _ <- server.sendStreamEvent(StreamEvent.Stanza(streamFeatures))
           _ <- server.sendStreamEvent(StreamEvent.Stanza(Element(QName("helloes", "hello"), Seq.empty, Seq.empty)))
           _ <- clientOutboundEventsSourceQueue.offer(StreamEvent.Stanza(Element(QName("helloes", "hello-yourself"), Seq.empty, Seq.empty)))
           StreamEvent.Stanza(helloYourself) <- server.receiveStreamEvent()
