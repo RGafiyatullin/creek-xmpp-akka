@@ -76,7 +76,7 @@ object StanzasToStreamProtocol {
         offerResult <- sourceQueue
           .offer(streamEvent)
           .recover {
-            case e: Exception =>
+            case e /*: Exception */ =>
               QueueOfferResult.Failure(e)
           }
         shouldProceed <- offerResult match {
@@ -215,6 +215,6 @@ final case class StanzasToStreamProtocol(
 
     bothStreamsDoneFuture
       .map { case Done => context.complete }
-      .recover { case e: Exception => context.fail(e) }
+      .recover { case e /*: Exception */ => context.fail(e) }
   }
 }

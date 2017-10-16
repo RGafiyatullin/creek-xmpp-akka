@@ -199,11 +199,11 @@ sealed trait ProtocolBase[-In, +Out] {
     AndThen[In, Interim, OutNext](this, other)
 
   private def recoverToResult[In1 <: In](context: Context[In1]): PartialFunction[Throwable, ProcessResult[In1, Out]] = {
-    case e: Exception => context.fail(e)
+    case e /*: Exception */ => context.fail(e)
   }
 
   private def recoverToResultFuture[In1 <: In](context: Context[In1]): PartialFunction[Throwable, Future[ProcessResult[In1, Out]]] = {
-    case e: Exception => Future.successful(context.fail(e))
+    case e /* : Exception */ => Future.successful(context.fail(e))
   }
 
   def run[In1 <: In](context: Context[In1])(implicit ec: ExecutionContext): Future[ProcessResult[In1, Out]] =
