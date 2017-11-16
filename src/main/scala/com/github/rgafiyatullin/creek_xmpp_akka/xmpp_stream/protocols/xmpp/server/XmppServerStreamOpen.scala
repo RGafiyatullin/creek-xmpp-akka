@@ -17,7 +17,7 @@ object XmppServerStreamOpen {
 }
 
 final case class XmppServerStreamOpen(
-  attributes: Seq[Attribute],
+  attributes: Seq[Attribute] = Seq.empty,
   xmppServerProtocolInternals: XmppServerProtocol.Internals = XmppServerProtocol.Internals.empty)
     extends XmppServerProtocol[XmppServerStreamOpen]
 {

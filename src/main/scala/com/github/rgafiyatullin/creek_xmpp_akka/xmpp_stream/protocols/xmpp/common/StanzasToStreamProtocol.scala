@@ -7,7 +7,7 @@ import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 object StanzasToStreamProtocol {
   final case class ProcessingStarted(
@@ -72,30 +72,45 @@ object StanzasToStreamProtocol {
       (implicit ec: ExecutionContext)
     : Unit =
       for {
-        streamEvent <- xmppStream.receiveStreamEvent()
-        offerResult <- sourceQueue
-          .offer(streamEvent)
-          .recover {
-            case e /*: Exception */ =>
-              QueueOfferResult.Failure(e)
-          }
-        shouldProceed <- offerResult match {
-          case QueueOfferResult.Failure(reason) =>
-            sourceQueue.fail(reason) // TODO: rewrap the reason here?
+        streamEventTry <- xmppStream.receiveStreamEvent()
+          .map(se => Success(se))
+          .recover[Try[StreamEvent]]{ case reason => Failure(reason) }
+
+        shouldProceed <- streamEventTry match {
+          case Failure(reason) =>
+            sourceQueue.fail(reason)
             Future.successful(false)
 
-          case QueueOfferResult.QueueClosed =>
-            sourceQueue.complete()
-            Future.successful(false)
+          case Success(streamEvent) =>
+            for {
+              offerResult <- sourceQueue
+                .offer(streamEvent)
+                .recover {
+                  case e /*: Exception */ =>
+                    QueueOfferResult.Failure(e)
+                }
+              shouldProceedInner <-
+                offerResult match {
+                  case QueueOfferResult.Failure(reason) =>
+                    sourceQueue.fail(reason) // TODO: rewrap the reason here?
+                    Future.successful(false)
 
-          case QueueOfferResult.Dropped =>
-            onDrop(streamEvent) // TODO: what if the chosen OverflowStrategy is other than DropNew?
+                  case QueueOfferResult.QueueClosed =>
+                    sourceQueue.complete()
+                    Future.successful(false)
 
-          case QueueOfferResult.Enqueued =>
-            Future.successful(true)
+                  case QueueOfferResult.Dropped =>
+                    onDrop(streamEvent) // TODO: what if the chosen OverflowStrategy is other than DropNew?
+
+                  case QueueOfferResult.Enqueued =>
+                    Future.successful(true)
+                }
+            }
+              yield shouldProceedInner
         }
       }
         if (shouldProceed) loop(xmppStream, sourceQueue)
+
   }
 
   final case class OutboundStreamSetupEmpty()

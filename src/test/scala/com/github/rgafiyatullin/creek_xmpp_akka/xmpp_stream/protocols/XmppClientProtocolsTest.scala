@@ -13,6 +13,7 @@ import com.github.rgafiyatullin.creek_xmpp.protocol.stream_error.XmppStreamError
 import com.github.rgafiyatullin.creek_xmpp.streams.StreamEvent
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocols.xmpp.client.{SaslAuth, UpgradeToBinaryXmlTransport, XmppClientProtocol, XmppClientStreamOpen}
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocols.xmpp.common.StanzasToStreamProtocol
+import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.protocols.xmpp.server.XmppServerStreamOpen
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.stream.XmppStream.api.ResetStreams
 import com.github.rgafiyatullin.creek_xmpp_akka.xmpp_stream.transports.{BinaryXml, PlainXml}
@@ -320,6 +321,69 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
           yield ()
       }
     )
+
+  it should "work with reset-by-peer" in
+    futureShouldSucceed(
+      withActorSystem(){ actorSystem =>
+        def sleep(fd: FiniteDuration): Future[Unit] =
+          akka.pattern.after(fd, actorSystem.scheduler)(Future.successful(()))
+
+        withClientAndServer { case (xmppServer, clientAndServer) =>
+          val stanza = Element(QName("ns", "ncn"), Seq.empty, Seq.empty)
+
+          val materializer = ActorMaterializer()(actorSystem)
+          val client = clientAndServer.client
+          val server = clientAndServer.server
+
+          val (clientInboundSourceQueue, clientInboundSinkQueue) =
+            Source.queue[StreamEvent](1, OverflowStrategy.backpressure)
+              .toMat(Sink.queue())(Keep.both)
+              .run()(materializer)
+
+          val (serverOutboundSourceQueue, serverOutboundSinkQueue) =
+            Source.queue[StreamEvent](1, OverflowStrategy.backpressure)
+              .toMat(Sink.queue())(Keep.both)
+              .run()(materializer)
+
+          val clientProcessingStarted = StanzasToStreamProtocol.ProcessingStarted()
+          val clientProtocol = XmppClientStreamOpen() andThen StanzasToStreamProtocol()
+          val clientProtocolCtx =
+            Protocol.Context
+              .create(client)
+              .addArtifact(clientProcessingStarted)
+              .addArtifact(
+                StanzasToStreamProtocol.InboundStreamSetupSourceQueueFuture(Future.successful(clientInboundSourceQueue)))
+
+
+          val serverProcessingStarted = StanzasToStreamProtocol.ProcessingStarted()
+          val serverProtocol = XmppServerStreamOpen() andThen StanzasToStreamProtocol()
+          val serverProtocolCtx =
+            Protocol.Context
+              .create(server)
+              .addArtifact(serverProcessingStarted)
+              .addArtifact(
+                StanzasToStreamProtocol.OutboundStreamSetupSinkQueueFuture(
+                  Future.successful(serverOutboundSinkQueue), 5.seconds))
+
+          val clientProtocolComplete = clientProtocol.run(clientProtocolCtx)
+          val serverProtocolComplete = serverProtocol.run(serverProtocolCtx)
+
+          for {
+            _ <- clientProcessingStarted.promise.future
+            _ <- serverProcessingStarted.promise.future
+            _ <- serverOutboundSourceQueue.offer(StreamEvent.Stanza(stanza))
+            _ <- clientInboundSinkQueue.pull()
+            _ <- serverOutboundSourceQueue.offer(StreamEvent.Stanza(stanza))
+            _ <- clientInboundSinkQueue.pull()
+            _ <- serverOutboundSourceQueue.offer(StreamEvent.Stanza(stanza))
+            _ <- clientInboundSinkQueue.pull()
+            _ <- serverOutboundSourceQueue.offer(StreamEvent.Stanza(stanza))
+            _ <- clientInboundSinkQueue.pull()
+            _ <- server.terminate()
+            tcpErrorClosed <- clientInboundSinkQueue.pull().failed
+          }
+            yield tcpErrorClosed shouldBe a[XmppStream.api.Shutdown]
+        }})
 
 
 //  "a mere test" should "do" in
