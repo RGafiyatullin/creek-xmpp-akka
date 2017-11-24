@@ -169,6 +169,8 @@ trait XmppServerUtil extends ActorSystemUtil {
           connectTo <- xmppServer.boundAddress()
           client = XmppStream(actorSystem.actorOf(XmppStream.propsConnectTo(connectTo, PlainXml)))
           server <- xmppServer.nextXmppStream()
+          _ = client.registerOwner(createAnActor(actorSystem))
+          _ = server.registerOwner(createAnActor(actorSystem))
           result <- f(xmppServer, ClientAndServer(server, client))
         }
           yield result

@@ -49,6 +49,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
 
   "stream open with upgrade to binary-xml transport" should "work (happy case)" in
     futureShouldSucceed(
+      withActorSystem() { actorSystem =>
       withClientAndServer { case (xmppServer, clientAndServer) =>
         val streamFeaturesWithoutBinaryXml =
           Element(XmppConstants.names.streams.features, Seq(), Seq())
@@ -61,6 +62,7 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
 
         val client = clientAndServer.client
         val server = clientAndServer.server
+
         val clientProtocol = protocolStreamOpenWithUpgradeToBinaryXmlTransport
         val clientProtocolResultFuture = clientProtocol.run(Protocol.Context.create(client))
 
@@ -76,12 +78,13 @@ class XmppClientProtocolsTest extends FlatSpec with Matchers with ScalaFutures w
           _ <- server.sendStreamEvent(StreamEvent.Stanza(streamFeaturesWithoutBinaryXml))
           clientProtocolResult <- clientProtocolResultFuture
           _ = println(clientProtocolResult)
+          _ = clientProtocolResult.failureOption.foreach(println)
           _ = clientProtocolResult.isComplete should be (true)
           clientProtocolResultRejected <- UpgradeToBinaryXmlTransport().run(clientProtocolResult.completeContextOption.get)
           _ = clientProtocolResultRejected.isRejected should be (true)
         }
           yield println(clientProtocolResult)
-      })
+      }})
 
   "stream open with sasl-plain authentication" should "work (happy case)" in
     futureShouldSucceed(withClientAndServer { case (xmppServer, clientAndServer) =>

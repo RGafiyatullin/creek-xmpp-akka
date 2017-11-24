@@ -24,7 +24,7 @@ object PlainXml extends XmppTransportFactory {
 
 final case class PlainXml(
   writer: HighLevelWriter = HighLevelWriter.empty,
-  reader: HighLevelParser = HighLevelParser.empty.withoutPosition,
+  reader: HighLevelParser = HighLevelParser.empty.withoutPosition.registerPrefix("xml", "__xml__"),
   utf8InputStream: Utf8InputStream = Utf8InputStream.empty
 ) extends XmppTransport
 {

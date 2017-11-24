@@ -31,7 +31,7 @@ class PlainXmlTest extends FlatSpec with Matchers {
   }
 
   it should "succesfully parse stream-open and auth from Adium" in {
-    val bs0 = ByteString("""<?xml version='1.0' ?><stream:stream to='c2s.3pp-01.xmppcs.dev' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>
+    val bs0 = ByteString("""<?xml version='1.0' ?><stream:stream to='c2s.3pp-01.xmppcs.dev' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0' xml:lang='en'>
                            |<auth
                            |	xmlns='urn:ietf:params:xml:ns:xmpp-sasl'
                            |	mechanism='PLAIN'
@@ -47,7 +47,8 @@ class PlainXmlTest extends FlatSpec with Matchers {
       Attribute.Unprefixed("to", "c2s.3pp-01.xmppcs.dev"),
       Attribute.NsImport("", "jabber:client"),
       Attribute.NsImport("stream", "http://etherx.jabber.org/streams"),
-      Attribute.Unprefixed("version", "1.0")
+      Attribute.Unprefixed("version", "1.0"),
+      Attribute.Prefixed("xml", "lang", "en")
     ))
     hles(2) shouldBe a[HighLevelEvent.Whitespace]
     hles(3) shouldBe a[HighLevelEvent.ElementOpen]
