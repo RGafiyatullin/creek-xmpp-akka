@@ -33,7 +33,7 @@ object Protocol {
     def fail(reason: Throwable): ProcessResult[Nothing, Nothing] =
       ProcessResult.Failed(reason)
 
-    def reject(): ProcessResult[A, Nothing] =
+    def reject: ProcessResult[A, Nothing] =
       ProcessResult.Rejected(this)
 
     def complete[B](result: B): ProcessResult[Nothing, B] =
@@ -104,7 +104,7 @@ object Protocol {
       (context: Context[In1])
       (implicit ec: ExecutionContext)
     : Future[ProcessResult[In1, Nothing]] =
-      Future.successful(context.reject())
+      Future.successful(context.reject)
   }
 
   final case class AlwaysFail(reason: Throwable)

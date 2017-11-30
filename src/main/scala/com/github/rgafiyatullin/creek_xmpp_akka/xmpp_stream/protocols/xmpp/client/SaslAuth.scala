@@ -37,17 +37,23 @@ object SaslAuth {
     }
   }
 
-
   trait SaslAuthenticationClientProtocol[Self <: SaslAuthenticationClientProtocol[Self]] extends XmppClientProtocol[Self] {
     def hasSaslMechanism(context: Protocol.Context[XmppStream], mechanism: String): Option[Node] =
       features.feature(context, names.qNameSaslMechanismsFeature)
         .flatMap(_.children.collectFirst { case node: Node if node.text == mechanism => node })
   }
 
-  final case class PlainText
-    (username: String = "",
-     password: String = "",
-     xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
+  object PlainText {
+    def apply(): PlainText = apply(username = "", password = "")
+    def apply(username: String): PlainText = apply(username, password = "")
+    def apply(username: String, password: String): PlainText =
+      PlainText(username, password, xmppClientProtocolInternals = XmppClientProtocol.Internals.empty)
+  }
+
+  final case class PlainText private
+    (username: String,
+     password: String,
+     xmppClientProtocolInternals: XmppClientProtocol.Internals)
       extends SaslAuthenticationClientProtocol[PlainText]
   {
     override def withXmppClientProtocolInternals(b: XmppClientProtocol.Internals): PlainText =
@@ -64,7 +70,7 @@ object SaslAuth {
       (doIt: => Future[Protocol.ProcessResult[In1, XmppStream]])
     : Future[Protocol.ProcessResult[In1, XmppStream]] =
       if (!hasFeature(context))
-        Future.successful(context.reject())
+        Future.successful(context.reject)
       else
         doIt
 

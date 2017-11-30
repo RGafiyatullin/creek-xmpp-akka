@@ -187,11 +187,13 @@ object StanzasToStreamProtocol {
     }
   }
 
+  def apply(): StanzasToStreamProtocol =
+    StanzasToStreamProtocol(xmppProtocolInternals = XmppProtocol.Internals.empty)
+
 }
 
-final case class StanzasToStreamProtocol(
-  xmppProtocolInternals: XmppProtocol.Internals = XmppProtocol.Internals.empty)
-    extends XmppProtocol[StanzasToStreamProtocol]
+final case class StanzasToStreamProtocol private(xmppProtocolInternals: XmppProtocol.Internals)
+  extends XmppProtocol[StanzasToStreamProtocol]
 {
   import StanzasToStreamProtocol._
 

@@ -16,10 +16,13 @@ object UpgradeToBinaryXmlTransport {
   val qNameProceed: QName = QName(xmlNs, "proceed")
 
   case object BinaryXmlTransportUsed extends XmppClientProtocol.Artifact
+
+  def apply(): UpgradeToBinaryXmlTransport =
+    UpgradeToBinaryXmlTransport(xmppClientProtocolInternals = XmppClientProtocol.Internals.empty)
 }
 
-final case class UpgradeToBinaryXmlTransport
-  (xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
+final case class UpgradeToBinaryXmlTransport private
+  (xmppClientProtocolInternals: XmppClientProtocol.Internals)
     extends XmppClientProtocol[UpgradeToBinaryXmlTransport]
 {
   import UpgradeToBinaryXmlTransport._
@@ -36,7 +39,7 @@ final case class UpgradeToBinaryXmlTransport
     (doIt: => Future[Protocol.ProcessResult[In1, XmppStream]])
   : Future[Protocol.ProcessResult[In1, XmppStream]] =
     if (!hasFeature(context))
-      Future.successful(context.reject())
+      Future.successful(context.reject)
     else
       doIt
 

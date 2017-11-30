@@ -16,14 +16,34 @@ import scala.concurrent.{ExecutionContext, Future}
 object XmppClientStreamOpen {
   final case class LocalStreamAttributes(attributes: Seq[Attribute]) extends XmppClientProtocol.Artifact
   final case class RemoteStreamAttributes(attributes: Seq[Attribute]) extends XmppClientProtocol.Artifact
+
+  def apply(): XmppClientStreamOpen =
+    apply(Seq.empty, transportFactoryOption = None)
+
+  def apply(attributes: Seq[Attribute]): XmppClientStreamOpen =
+    apply(attributes, transportFactoryOption = None)
+
+  def apply
+    (attributes: Seq[Attribute],
+     transportFactory: XmppTransportFactory)
+  : XmppClientStreamOpen =
+    apply(attributes, Some(transportFactory))
+
+  def apply
+    (attributes: Seq[Attribute],
+     transportFactoryOption: Option[XmppTransportFactory])
+  : XmppClientStreamOpen =
+    XmppClientStreamOpen(
+      attributes,
+      transportFactoryOption = None,
+      xmppClientProtocolInternals = XmppClientProtocol.Internals.empty)
 }
 
-final case class XmppClientStreamOpen
-  (
-    attributes: Seq[Attribute] = Seq.empty,
-    transportFactoryOption: Option[XmppTransportFactory] = None,
-    xmppClientProtocolInternals: XmppClientProtocol.Internals = XmppClientProtocol.Internals.empty)
-      extends XmppClientProtocol[XmppClientStreamOpen]
+final case class XmppClientStreamOpen private
+  (attributes: Seq[Attribute],
+   transportFactoryOption: Option[XmppTransportFactory],
+   xmppClientProtocolInternals: XmppClientProtocol.Internals)
+  extends XmppClientProtocol[XmppClientStreamOpen]
 {
   import XmppClientStreamOpen.{LocalStreamAttributes, RemoteStreamAttributes}
 
